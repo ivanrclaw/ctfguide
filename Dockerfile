@@ -40,6 +40,10 @@ COPY --from=builder /app/ ./
 # Rebuild bcrypt for this Node ABI (native module!)
 RUN cd apps/api && npm rebuild bcrypt 2>/dev/null || npm rebuild
 
+# Copy built frontend as the 'client' directory relative to the API
+# The API serves static files from dist/../client = apps/api/client
+COPY --from=builder /app/apps/web/dist ./apps/api/client
+
 # Copy entrypoint script
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
