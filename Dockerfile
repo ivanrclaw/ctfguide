@@ -20,6 +20,9 @@ RUN pnpm install --frozen-lockfile
 # Build shared package first, then all apps
 RUN pnpm run build
 
+# Prune dev dependencies to reduce image size
+RUN pnpm prune --prod
+
 # ---- Stage 2: Production ----
 FROM node:22-bookworm
 
@@ -31,14 +34,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy entire API directory (including node_modules with resolved symlinks)
-COPY --from=builder /app/apps/api/ ./
+# Copy entire built workspace (symlinks preserved, devDeps pruned)
+COPY --from=builder /app/ ./
 
 # Rebuild bcrypt for this Node ABI (native module!)
-RUN npm rebuild bcrypt 2>/dev/null || npm rebuild
-
-# Copy built frontend (static files)
-COPY --from=builder /app/apps/web/dist ./client
+RUN cd apps/api && npm rebuild bcrypt 2>/dev/null || npm rebuild
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /app/entrypoint.sh
@@ -58,5 +58,7 @@ ENV DATA_DIR=/data
 VOLUME ["/data"]
 
 EXPOSE 3001
+
+WORKDIR /app/apps/api
 
 ENTRYPOINT ["/app/entrypoint.sh"]
