@@ -50,7 +50,7 @@ su - postgres -c "$PG_BIN/pg_ctl -D $PGDATA -l $DATA_DIR/pg.log -w start"
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL..."
 for i in $(seq 1 30); do
-  if "$PG_BIN/pg_isready" -h 127.0.0.1 -p 5432 &>/dev/null; then
+  if "$PG_BIN/pg_isready" -h 127.0.0.1 -p 5432 -U postgres &>/dev/null; then
     echo "PostgreSQL is ready!"
     break
   fi
@@ -64,10 +64,10 @@ done
 
 # Create database and user if they don't exist
 echo "Setting up database..."
-"$PG_BIN/psql" -h 127.0.0.1 -p 5432 -d postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='ctfguide'" | grep -q 1 || \
-  "$PG_BIN/psql" -h 127.0.0.1 -p 5432 -d postgres -c "CREATE USER ctfguide WITH PASSWORD 'ctfguide_pwd';"
-"$PG_BIN/psql" -h 127.0.0.1 -p 5432 -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='ctfguide'" | grep -q 1 || \
-  "$PG_BIN/psql" -h 127.0.0.1 -p 5432 -d postgres -c "CREATE DATABASE ctfguide OWNER ctfguide;"
+"$PG_BIN/psql" -h 127.0.0.1 -p 5432 -U postgres -d postgres -tc "SELECT 1 FROM pg_roles WHERE rolname='ctfguide'" | grep -q 1 || \
+  "$PG_BIN/psql" -h 127.0.0.1 -p 5432 -U postgres -d postgres -c "CREATE USER ctfguide WITH PASSWORD 'ctfguide_pwd' LOGIN;"
+"$PG_BIN/psql" -h 127.0.0.1 -p 5432 -U postgres -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='ctfguide'" | grep -q 1 || \
+  "$PG_BIN/psql" -h 127.0.0.1 -p 5432 -U postgres -d postgres -c "CREATE DATABASE ctfguide OWNER ctfguide;"
 
 echo "Starting CTF Guide API..."
 exec node dist/main.js
