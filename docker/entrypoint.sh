@@ -6,6 +6,9 @@ PGDATA="${DATA_DIR}/pgdata"
 UPLOAD_DIR="${DATA_DIR}/uploads"
 PG_BIN="/usr/lib/postgresql/15/bin"
 
+# Ensure data dir permissions — postgres user needs write access
+chown postgres:postgres "$DATA_DIR"
+
 # Create upload directory for future file uploads
 mkdir -p "$UPLOAD_DIR"
 
