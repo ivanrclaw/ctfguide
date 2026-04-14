@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { join } from 'path';
+import * as fs from 'fs';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -15,19 +16,29 @@ async function bootstrap() {
 
   // Serve static frontend files in production
   if (process.env.NODE_ENV === 'production') {
+    // client/ is at the same level as dist/ in the deployed structure
+    // dist/main.js -> ../client/index.html
     const clientPath = join(__dirname, '..', 'client');
 
-    // Serve static files (JS, CSS, images, etc.)
-    app.useStaticAssets(clientPath);
+    // Verify client files exist
+    if (fs.existsSync(join(clientPath, 'index.html'))) {
+      console.log(`Serving frontend from: ${clientPath}`);
 
-    // SPA fallback: serve index.html for non-API routes
-    app.use((req: any, res: any, next: any) => {
-      if (!req.path.startsWith('/api/')) {
-        res.sendFile(join(clientPath, 'index.html'));
-      } else {
-        next();
-      }
-    });
+      // Serve static files (JS, CSS, images, etc.)
+      app.useStaticAssets(clientPath);
+
+      // SPA fallback: serve index.html for non-API, non-static routes
+      app.use((req: any, res: any, next: any) => {
+        // Only serve index.html for non-API, non-file-extension routes
+        if (!req.path.startsWith('/api/') && !req.path.match(/\.\w+$/)) {
+          res.sendFile(join(clientPath, 'index.html'));
+        } else {
+          next();
+        }
+      });
+    } else {
+      console.warn(`Client files not found at ${clientPath}, frontend will not be served`);
+    }
   }
 
   const configService = app.get(ConfigService);
