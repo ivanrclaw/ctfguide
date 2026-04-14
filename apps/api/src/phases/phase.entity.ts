@@ -15,6 +15,15 @@ export class Phase {
   @Column({ default: '' })
   password: string;
 
+  @Column({ default: 'none' })
+  unlockType: string;
+
+  @Column({ default: '' })
+  question: string;
+
+  @Column({ default: '' })
+  answer: string;
+
   @Column()
   order: number;
 

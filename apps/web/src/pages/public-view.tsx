@@ -17,6 +17,8 @@ import {
   Skull,
   Trophy,
   Hash,
+  Brain,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -25,7 +27,9 @@ interface PublicPhase {
   title: string;
   content: string;
   order: number;
+  unlockType: 'none' | 'password' | 'llm';
   hasPassword: boolean;
+  question: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,7 +75,8 @@ export function PublicView() {
   const [guide, setGuide] = useState<PublicGuide | null>(null);
   const [unlockedPhases, setUnlockedPhases] = useState<Set<string>>(new Set());
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
-  const [passwordInputs, setPasswordInputs] = useState<Record<string, string>>({});
+  const [userInputs, setUserInputs] = useState<Record<string, string>>({});
+  const [verifying, setVerifying] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -84,8 +89,8 @@ export function PublicView() {
       })
       .then((data: PublicGuide) => {
         setGuide(data);
-        // Auto-expand first phase if it has no password
-        if (data.phases.length > 0 && !data.phases[0].hasPassword) {
+        // Auto-expand first phase if it has no unlock
+        if (data.phases.length > 0 && data.phases[0].unlockType === 'none') {
           setUnlockedPhases(new Set([data.phases[0].id]));
           setExpandedPhases(new Set([data.phases[0].id]));
         }
@@ -94,29 +99,52 @@ export function PublicView() {
       .finally(() => setIsLoading(false));
   }, [slug]);
 
-  const verifyPassword = async (phaseId: string) => {
-    const password = passwordInputs[phaseId] || '';
+  const verifyPhase = async (phase: PublicPhase) => {
+    const userInput = userInputs[phase.id] || '';
+    if (!userInput.trim()) {
+      toast.error('Please enter an answer');
+      return;
+    }
+
+    setVerifying((prev) => new Set([...prev, phase.id]));
     try {
-      const res = await fetch(`${PUBLIC_API}/public/phase/${phaseId}/verify`, {
+      const body: Record<string, string> = {};
+      if (phase.unlockType === 'password') {
+        body.password = userInput;
+      } else if (phase.unlockType === 'llm') {
+        body.answer = userInput;
+      }
+
+      const res = await fetch(`${PUBLIC_API}/public/phase/${phase.id}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (data.valid) {
-        setUnlockedPhases((prev) => new Set([...prev, phaseId]));
-        setExpandedPhases((prev) => new Set([...prev, phaseId]));
-        setPasswordInputs((prev) => {
+        setUnlockedPhases((prev) => new Set([...prev, phase.id]));
+        setExpandedPhases((prev) => new Set([...prev, phase.id]));
+        setUserInputs((prev) => {
           const next = { ...prev };
-          delete next[phaseId];
+          delete next[phase.id];
           return next;
         });
         toast.success('Phase unlocked!');
       } else {
-        toast.error('Wrong password');
+        toast.error(
+          phase.unlockType === 'password'
+            ? 'Wrong password'
+            : 'Answer is not correct. Try again!',
+        );
       }
     } catch {
-      toast.error('Error verifying password');
+      toast.error('Error verifying answer');
+    } finally {
+      setVerifying((prev) => {
+        const next = new Set(prev);
+        next.delete(phase.id);
+        return next;
+      });
     }
   };
 
@@ -127,6 +155,10 @@ export function PublicView() {
       else next.add(phaseId);
       return next;
     });
+  };
+
+  const isPhaseLocked = (phase: PublicPhase) => {
+    return phase.unlockType !== 'none' && !unlockedPhases.has(phase.id);
   };
 
   if (isLoading) {
@@ -187,16 +219,16 @@ export function PublicView() {
       <div className="mx-auto max-w-4xl px-6 py-8">
         <div className="space-y-4">
           {guide.phases.map((phase, index) => {
-            const isUnlocked = unlockedPhases.has(phase.id);
+            const locked = isPhaseLocked(phase);
             const isExpanded = expandedPhases.has(phase.id);
 
             return (
               <Card
                 key={phase.id}
                 className={`overflow-hidden transition-all ${
-                  !isUnlocked && phase.hasPassword
+                  locked
                     ? 'border-dashed opacity-80'
-                    : isUnlocked
+                    : unlockedPhases.has(phase.id)
                     ? 'border-primary/20'
                     : ''
                 }`}
@@ -204,14 +236,18 @@ export function PublicView() {
                 <CardHeader
                   className="cursor-pointer py-3"
                   onClick={() => {
-                    if (isUnlocked || !phase.hasPassword) togglePhase(phase.id);
+                    if (!locked) togglePhase(phase.id);
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    {isUnlocked ? (
+                    {locked ? (
+                      phase.unlockType === 'password' ? (
+                        <Lock className="h-4 w-4 text-orange-500" />
+                      ) : (
+                        <Brain className="h-4 w-4 text-purple-500" />
+                      )
+                    ) : unlockedPhases.has(phase.id) ? (
                       <Unlock className="h-4 w-4 text-green-500" />
-                    ) : phase.hasPassword ? (
-                      <Lock className="h-4 w-4 text-orange-500" />
                     ) : (
                       <Unlock className="h-4 w-4 text-muted-foreground" />
                     )}
@@ -222,55 +258,117 @@ export function PublicView() {
                       {phase.title}
                     </CardTitle>
 
-                    <div className="ml-auto">
-                      {(isUnlocked || !phase.hasPassword) &&
-                        (isExpanded ? (
+                    <div className="ml-auto flex items-center gap-2">
+                      {locked && phase.unlockType === 'llm' && (
+                        <Badge variant="secondary" className="text-xs">
+                          <Brain className="mr-1 h-3 w-3" />
+                          AI Question
+                        </Badge>
+                      )}
+                      {!locked && (
+                        isExpanded ? (
                           <ChevronDown className="h-4 w-4 text-muted-foreground" />
                         ) : (
                           <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        ))}
+                        )
+                      )}
                     </div>
                   </div>
                 </CardHeader>
 
-                {isExpanded && (isUnlocked || !phase.hasPassword) && (
+                {isExpanded && !locked && (
                   <CardContent className="border-t pt-4">
                     <MarkdownPreview content={phase.content} />
                   </CardContent>
                 )}
 
-                {!isUnlocked && phase.hasPassword && (
+                {locked && (
                   <CardContent className="border-t bg-muted/30 pt-4">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4 text-orange-500" />
-                      <span className="text-sm text-muted-foreground">
-                        Enter the password to unlock this phase
-                      </span>
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <Input
-                        type="password"
-                        placeholder="Phase password"
-                        value={passwordInputs[phase.id] || ''}
-                        onChange={(e) =>
-                          setPasswordInputs((prev) => ({
-                            ...prev,
-                            [phase.id]: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') verifyPassword(phase.id);
-                        }}
-                        className="max-w-xs"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => verifyPassword(phase.id)}
-                      >
-                        <Unlock className="mr-1 h-3.5 w-3.5" />
-                        Unlock
-                      </Button>
-                    </div>
+                    {phase.unlockType === 'password' && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Lock className="h-4 w-4 text-orange-500" />
+                          <span className="text-sm text-muted-foreground">
+                            Enter the password to unlock this phase
+                          </span>
+                        </div>
+                        <div className="mt-3 flex gap-2">
+                          <Input
+                            type="password"
+                            placeholder="Phase password"
+                            value={userInputs[phase.id] || ''}
+                            onChange={(e) =>
+                              setUserInputs((prev) => ({
+                                ...prev,
+                                [phase.id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') verifyPhase(phase);
+                            }}
+                            className="max-w-xs"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => verifyPhase(phase)}
+                            disabled={verifying.has(phase.id)}
+                          >
+                            <Unlock className="mr-1 h-3.5 w-3.5" />
+                            Unlock
+                          </Button>
+                        </div>
+                      </>
+                    )}
+
+                    {phase.unlockType === 'llm' && (
+                      <>
+                        <div className="flex items-center gap-2">
+                          <Brain className="h-4 w-4 text-purple-500" />
+                          <span className="text-sm text-muted-foreground">
+                            Answer the question to unlock this phase
+                          </span>
+                        </div>
+                        {phase.question && (
+                          <div className="mt-3 rounded-md border bg-background p-3">
+                            <p className="text-sm font-medium">{phase.question}</p>
+                          </div>
+                        )}
+                        <div className="mt-3 flex gap-2">
+                          <Input
+                            type="text"
+                            placeholder="Your answer..."
+                            value={userInputs[phase.id] || ''}
+                            onChange={(e) =>
+                              setUserInputs((prev) => ({
+                                ...prev,
+                                [phase.id]: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') verifyPhase(phase);
+                            }}
+                            className="max-w-md"
+                          />
+                          <Button
+                            size="sm"
+                            onClick={() => verifyPhase(phase)}
+                            disabled={verifying.has(phase.id)}
+                          >
+                            {verifying.has(phase.id) ? (
+                              <>
+                                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                                Checking...
+                              </>
+                            ) : (
+                              <>
+                                <Brain className="mr-1 h-3.5 w-3.5" />
+                                Submit
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </CardContent>
                 )}
               </Card>

@@ -4,11 +4,12 @@ import { Phase } from './phase.entity';
 import { Guide } from '../guides/guide.entity';
 import { PhasesController } from './phases.controller';
 import { PhasesService } from './phases.service';
+import { LlmVerifyService } from './llm-verify.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([Phase, Guide])],
   controllers: [PhasesController],
-  providers: [PhasesService],
+  providers: [PhasesService, LlmVerifyService],
   exports: [PhasesService],
 })
 export class PhasesModule {}

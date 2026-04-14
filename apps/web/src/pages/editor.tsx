@@ -1,13 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { MarkdownPreview } from '@/components/markdown-preview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Plus,
   Trash2,
-  Save,
   Eye,
   Lock,
   GripVertical,
@@ -15,8 +22,27 @@ import {
   ArrowLeft,
   Copy,
   Check,
+  Brain,
+  Cloud,
+  CloudOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Phase {
   id: string;
@@ -24,6 +50,9 @@ interface Phase {
   content: string;
   password: string;
   order: number;
+  unlockType: 'none' | 'password' | 'llm';
+  question: string;
+  answer: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -41,6 +70,71 @@ interface Guide {
   phases: Phase[];
 }
 
+function SortablePhaseItem({
+  phase,
+  index,
+  isActive,
+  onClick,
+  onDelete,
+}: {
+  phase: Phase;
+  index: number;
+  isActive: boolean;
+  onClick: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: phase.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0.5 : undefined,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors ${
+        isActive
+          ? 'bg-primary text-primary-foreground'
+          : 'hover:bg-muted'
+      } ${isDragging ? 'shadow-lg' : ''}`}
+      onClick={onClick}
+    >
+      <span
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-3 w-3 shrink-0 opacity-40" />
+      </span>
+      <div className="flex-1 truncate">
+        <span className="font-medium">{index + 1}.</span> {phase.title}
+      </div>
+      {phase.unlockType === 'password' && <Lock className="h-3 w-3 shrink-0" />}
+      {phase.unlockType === 'llm' && <Brain className="h-3 w-3 shrink-0" />}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={`h-5 w-5 shrink-0 p-0 opacity-0 group-hover:opacity-100 ${
+          isActive ? 'hover:bg-primary-foreground/20' : ''
+        }`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
+  );
+}
+
 export function Editor() {
   const { guideId } = useParams<{ guideId: string }>();
   const navigate = useNavigate();
@@ -48,11 +142,21 @@ export function Editor() {
   const [phases, setPhases] = useState<Phase[]>([]);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
   const activePhase = phases.find((p) => p.id === activePhaseId);
+
+  // Auto-save: track pending changes with ref and debounce timer
+  const pendingChanges = useRef<Map<string, Partial<Phase>>>(new Map());
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isUnmounted = useRef(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const fetchGuide = useCallback(async () => {
     if (!guideId) return;
@@ -79,6 +183,54 @@ export function Editor() {
     fetchGuide();
   }, [fetchGuide]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isUnmounted.current = true;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  // Flush pending changes to server
+  const flushChanges = useCallback(async () => {
+    if (isUnmounted.current) return;
+    const changes = new Map(pendingChanges.current);
+    if (changes.size === 0) return;
+    pendingChanges.current.clear();
+    setSaveStatus('saving');
+
+    try {
+      await Promise.all(
+        Array.from(changes.entries()).map(([phaseId, update]) =>
+          api.patch(`/phases/${phaseId}`, update),
+        ),
+      );
+      if (!isUnmounted.current) setSaveStatus('saved');
+    } catch {
+      if (!isUnmounted.current) {
+        setSaveStatus('unsaved');
+        toast.error('Auto-save failed');
+      }
+    }
+  }, []);
+
+  // Schedule auto-save with debounce
+  const scheduleSave = useCallback(() => {
+    setSaveStatus('unsaved');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(flushChanges, 1500);
+  }, [flushChanges]);
+
+  const updatePhaseContent = (phaseId: string, field: string, value: string) => {
+    setPhases((prev) =>
+      prev.map((p) => (p.id === phaseId ? { ...p, [field]: value } : p)),
+    );
+    // Queue change for auto-save
+    const existing = pendingChanges.current.get(phaseId) || {};
+    pendingChanges.current.set(phaseId, { ...existing, [field]: value });
+    scheduleSave();
+  };
+
   const addPhase = async () => {
     if (!guideId) return;
     try {
@@ -88,6 +240,9 @@ export function Editor() {
         content: '',
         password: '',
         order,
+        unlockType: 'none',
+        question: '',
+        answer: '',
       });
       setPhases((prev) => [...prev, phase]);
       setActivePhaseId(phase.id);
@@ -100,6 +255,7 @@ export function Editor() {
     if (!confirm('Delete this phase?')) return;
     try {
       await api.delete(`/phases/${phaseId}`);
+      pendingChanges.current.delete(phaseId);
       setPhases((prev) => prev.filter((p) => p.id !== phaseId));
       if (activePhaseId === phaseId) {
         const remaining = phases.filter((p) => p.id !== phaseId);
@@ -111,25 +267,29 @@ export function Editor() {
     }
   };
 
-  const updatePhaseContent = (phaseId: string, field: 'content' | 'title' | 'password', value: string) => {
-    setPhases((prev) =>
-      prev.map((p) => (p.id === phaseId ? { ...p, [field]: value } : p)),
-    );
-  };
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-  const savePhase = async (phase: Phase) => {
-    setIsSaving(true);
+    const oldIndex = phases.findIndex((p) => p.id === active.id);
+    const newIndex = phases.findIndex((p) => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    // Optimistic reorder
+    const reordered = [...phases];
+    const [moved] = reordered.splice(oldIndex, 1);
+    reordered.splice(newIndex, 0, moved);
+    const withNewOrder = reordered.map((p, i) => ({ ...p, order: i }));
+    setPhases(withNewOrder);
+
+    // Persist to server
     try {
-      await api.patch(`/phases/${phase.id}`, {
-        title: phase.title,
-        content: phase.content,
-        password: phase.password,
+      await api.post(`/phases/guide/${guideId}/reorder`, {
+        phaseIds: withNewOrder.map((p) => p.id),
       });
-      toast.success('Phase saved');
     } catch {
-      toast.error('Failed to save phase');
-    } finally {
-      setIsSaving(false);
+      toast.error('Failed to reorder phases');
+      setPhases(phases); // revert
     }
   };
 
@@ -188,7 +348,28 @@ export function Editor() {
             <p className="text-xs text-muted-foreground">{guide?.ctfName}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Save status indicator */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {saveStatus === 'saved' && (
+              <>
+                <Cloud className="h-3.5 w-3.5 text-green-500" />
+                <span className="text-green-600">Saved</span>
+              </>
+            )}
+            {saveStatus === 'saving' && (
+              <>
+                <Cloud className="h-3.5 w-3.5 animate-pulse text-blue-500" />
+                <span className="text-blue-600">Saving...</span>
+              </>
+            )}
+            {saveStatus === 'unsaved' && (
+              <>
+                <CloudOff className="h-3.5 w-3.5 text-orange-500" />
+                <span className="text-orange-600">Unsaved</span>
+              </>
+            )}
+          </div>
           {guide?.published ? (
             <>
               <div className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm">
@@ -213,7 +394,7 @@ export function Editor() {
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar: Phase list */}
+        {/* Sidebar: Phase list with drag & drop */}
         <div className="w-64 shrink-0 border-r bg-muted/30 overflow-y-auto">
           <div className="flex items-center justify-between p-3">
             <span className="text-sm font-medium">Phases</span>
@@ -221,43 +402,34 @@ export function Editor() {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          <div className="space-y-0.5 px-1">
-            {phases.map((phase, index) => (
-              <div
-                key={phase.id}
-                className={`group flex items-center gap-1 rounded-md px-2 py-1.5 text-sm cursor-pointer transition-colors ${
-                  activePhaseId === phase.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
-                }`}
-                onClick={() => setActivePhaseId(phase.id)}
-              >
-                <GripVertical className="h-3 w-3 shrink-0 opacity-40" />
-                <div className="flex-1 truncate">
-                  <span className="font-medium">{index + 1}.</span> {phase.title}
-                </div>
-                {phase.password && (
-                  <Lock className="h-3 w-3 shrink-0" />
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 w-5 shrink-0 p-0 opacity-0 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deletePhase(phase.id);
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={phases.map((p) => p.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-0.5 px-1">
+                {phases.map((phase, index) => (
+                  <SortablePhaseItem
+                    key={phase.id}
+                    phase={phase}
+                    index={index}
+                    isActive={activePhaseId === phase.id}
+                    onClick={() => setActivePhaseId(phase.id)}
+                    onDelete={() => deletePhase(phase.id)}
+                  />
+                ))}
               </div>
-            ))}
-            {phases.length === 0 && (
-              <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-                No phases yet. Click + to add one.
-              </div>
-            )}
-          </div>
+            </SortableContext>
+          </DndContext>
+          {phases.length === 0 && (
+            <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+              No phases yet. Click + to add one.
+            </div>
+          )}
         </div>
 
         {/* Editor area */}
@@ -265,35 +437,90 @@ export function Editor() {
           {activePhase ? (
             <div className="flex h-full flex-col">
               {/* Phase header */}
-              <div className="flex items-center gap-3 border-b px-4 py-2">
-                <Input
-                  value={activePhase.title}
-                  onChange={(e) => {
-                    updatePhaseContent(activePhase.id, 'title', e.target.value);
-                  }}
-                  className="h-8 border-none text-lg font-semibold shadow-none focus-visible:ring-0"
-                  placeholder="Phase title"
-                />
-                <div className="flex items-center gap-2">
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              <div className="border-b px-4 py-2">
+                <div className="flex items-center gap-3">
                   <Input
-                    value={activePhase.password}
-                    onChange={(e) => {
-                      updatePhaseContent(activePhase.id, 'password', e.target.value);
-                    }}
-                    className="h-7 w-40 text-xs"
-                    placeholder="Password (optional)"
-                    type="text"
+                    value={activePhase.title}
+                    onChange={(e) => updatePhaseContent(activePhase.id, 'title', e.target.value)}
+                    className="h-8 border-none text-lg font-semibold shadow-none focus-visible:ring-0"
+                    placeholder="Phase title"
                   />
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => savePhase(activePhase)}
-                  disabled={isSaving}
-                >
-                  <Save className="mr-1 h-3.5 w-3.5" />
-                  Save
-                </Button>
+                {/* Unlock type selector */}
+                <div className="mt-2 flex items-end gap-4">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs text-muted-foreground">Unlock method</Label>
+                    <Select
+                      value={activePhase.unlockType}
+                      onValueChange={(val) =>
+                        updatePhaseContent(activePhase.id, 'unlockType', val)
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-40 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">
+                          <span className="flex items-center gap-1.5">
+                            <Eye className="h-3 w-3" /> Free access
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="password">
+                          <span className="flex items-center gap-1.5">
+                            <Lock className="h-3 w-3" /> Password
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="llm">
+                          <span className="flex items-center gap-1.5">
+                            <Brain className="h-3 w-3" /> AI Question
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {activePhase.unlockType === 'password' && (
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">Password</Label>
+                      <Input
+                        value={activePhase.password}
+                        onChange={(e) =>
+                          updatePhaseContent(activePhase.id, 'password', e.target.value)
+                        }
+                        className="h-8 w-40 text-xs"
+                        placeholder="Password"
+                        type="text"
+                      />
+                    </div>
+                  )}
+
+                  {activePhase.unlockType === 'llm' && (
+                    <>
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-muted-foreground">Question</Label>
+                        <Input
+                          value={activePhase.question}
+                          onChange={(e) =>
+                            updatePhaseContent(activePhase.id, 'question', e.target.value)
+                          }
+                          className="h-8 w-48 text-xs"
+                          placeholder="Question for the user"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs text-muted-foreground">Expected answer</Label>
+                        <Input
+                          value={activePhase.answer}
+                          onChange={(e) =>
+                            updatePhaseContent(activePhase.id, 'answer', e.target.value)
+                          }
+                          className="h-8 w-48 text-xs"
+                          placeholder="Reference answer (AI will compare)"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Split view: editor + preview */}
@@ -302,9 +529,9 @@ export function Editor() {
                 <div className="flex-1 overflow-y-auto border-r">
                   <textarea
                     value={activePhase.content}
-                    onChange={(e) => {
-                      updatePhaseContent(activePhase.id, 'content', e.target.value);
-                    }}
+                    onChange={(e) =>
+                      updatePhaseContent(activePhase.id, 'content', e.target.value)
+                    }
                     className="h-full w-full resize-none bg-background p-4 font-mono text-sm outline-none"
                     placeholder={"Write your markdown here...\n\n# Phase 1: Reconnaissance\n\n## Steps\n1. Scan the target with nmap\n2. Enumerate directories\n3. Find the vulnerability\n\n```bash\nnmap -sV -sC target\n```"}
                     spellCheck={false}

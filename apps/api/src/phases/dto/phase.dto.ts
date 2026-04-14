@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsNotEmpty, IsIn } from 'class-validator';
 
 export class CreatePhaseDto {
   @IsString()
@@ -12,6 +12,19 @@ export class CreatePhaseDto {
   @IsOptional()
   @IsString()
   password?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['none', 'password', 'llm'])
+  unlockType?: string;
+
+  @IsOptional()
+  @IsString()
+  question?: string;
+
+  @IsOptional()
+  @IsString()
+  answer?: string;
 
   @IsNumber()
   order: number;
@@ -31,6 +44,19 @@ export class UpdatePhaseDto {
   password?: string;
 
   @IsOptional()
+  @IsString()
+  @IsIn(['none', 'password', 'llm'])
+  unlockType?: string;
+
+  @IsOptional()
+  @IsString()
+  question?: string;
+
+  @IsOptional()
+  @IsString()
+  answer?: string;
+
+  @IsOptional()
   @IsNumber()
   order?: number;
 }
@@ -40,8 +66,15 @@ export class ReorderPhasesDto {
   phaseIds: string[];
 }
 
-export class VerifyPhasePasswordDto {
+export class VerifyPhaseDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  password: string;
+  password?: string;
+
+  @IsOptional()
+  @IsString()
+  answer?: string;
 }
+
+/** @deprecated Use VerifyPhaseDto instead */
+export class VerifyPhasePasswordDto extends VerifyPhaseDto {}

@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { PhasesService } from './phases.service';
-import { CreatePhaseDto, UpdatePhaseDto, ReorderPhasesDto, VerifyPhasePasswordDto } from './dto/phase.dto';
+import { CreatePhaseDto, UpdatePhaseDto, ReorderPhasesDto, VerifyPhaseDto } from './dto/phase.dto';
 
 @Controller('phases')
 export class PhasesController {
@@ -53,8 +53,8 @@ export class PhasesController {
   }
 
   @Post(':id/verify')
-  async verifyPassword(@Param('id') id: string, @Body() dto: VerifyPhasePasswordDto) {
-    return this.phasesService.verifyPassword(id, dto.password);
+  async verify(@Param('id') id: string, @Body() dto: VerifyPhaseDto) {
+    return this.phasesService.verify(id, dto.password, dto.answer);
   }
 
   @Post('guide/:guideId/publish')

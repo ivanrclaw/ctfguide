@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Phase } from './phase.entity';
 import { Guide } from '../guides/guide.entity';
 import { CreatePhaseDto, UpdatePhaseDto, ReorderPhasesDto } from './dto/phase.dto';
+import { LlmVerifyService } from './llm-verify.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -13,6 +14,7 @@ export class PhasesService {
     private phasesRepository: Repository<Phase>,
     @InjectRepository(Guide)
     private guidesRepository: Repository<Guide>,
+    private readonly llmVerifyService: LlmVerifyService,
   ) {}
 
   async create(userId: string, guideId: string, dto: CreatePhaseDto): Promise<Phase> {
@@ -24,6 +26,9 @@ export class PhasesService {
       ...dto,
       guideId,
       password: dto.password || '',
+      unlockType: dto.unlockType || 'none',
+      question: dto.question || '',
+      answer: dto.answer || '',
     });
     return this.phasesRepository.save(phase);
   }
@@ -88,17 +93,43 @@ export class PhasesService {
     });
   }
 
-  async verifyPassword(phaseId: string, password: string): Promise<{ valid: boolean }> {
+  async verify(
+    phaseId: string,
+    password?: string,
+    answer?: string,
+  ): Promise<{ valid: boolean }> {
     const phase = await this.phasesRepository.findOne({ where: { id: phaseId } });
     if (!phase) throw new NotFoundException('Phase not found');
 
-    if (!phase.password) return { valid: true };
+    if (phase.unlockType === 'none') {
+      return { valid: true };
+    }
 
-    return { valid: phase.password === password };
+    if (phase.unlockType === 'password') {
+      if (!phase.password) return { valid: true };
+      return { valid: phase.password === password };
+    }
+
+    if (phase.unlockType === 'llm') {
+      if (!answer) return { valid: false };
+      const valid = await this.llmVerifyService.verifyAnswer(
+        phase.question,
+        phase.answer,
+        answer,
+      );
+      return { valid };
+    }
+
+    return { valid: false };
   }
 
-  // Public view: returns phases for a published guide, without passwords
-  async findPublicByGuide(slug: string): Promise<{ guide: Guide; phases: Phase[] }> {
+  /** @deprecated Use verify() instead */
+  async verifyPassword(phaseId: string, password: string): Promise<{ valid: boolean }> {
+    return this.verify(phaseId, password);
+  }
+
+  // Public view: returns phases for a published guide, without passwords/answers
+  async findPublicByGuide(slug: string): Promise<{ guide: Guide; phases: any[] }> {
     const guide = await this.guidesRepository.findOne({
       where: { slug },
       relations: ['phases', 'author'],
@@ -109,10 +140,11 @@ export class PhasesService {
     const phases = guide.phases
       .sort((a, b) => a.order - b.order);
 
-    // Strip passwords from response
-    const safePhases = phases.map(({ password, ...rest }) => ({
+    // Strip password and answer from response, add unlock metadata
+    const safePhases = phases.map(({ password, answer, ...rest }) => ({
       ...rest,
-      hasPassword: !!password,
+      hasPassword: rest.unlockType === 'password' && !!password,
+      question: rest.unlockType === 'llm' ? rest.question : undefined,
     })) as any;
 
     return {

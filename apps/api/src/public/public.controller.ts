@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Param, Body, NotFoundException } from '@nestjs/common';
 import { PhasesService } from '../phases/phases.service';
-import { VerifyPhasePasswordDto } from '../phases/dto/phase.dto';
+import { VerifyPhaseDto } from '../phases/dto/phase.dto';
 import { Public } from '../auth/auth.decorator';
 
 @Public()
@@ -14,7 +14,7 @@ export class PublicController {
   }
 
   @Post('phase/:id/verify')
-  async verifyPhasePassword(@Param('id') id: string, @Body() dto: VerifyPhasePasswordDto) {
-    return this.phasesService.verifyPassword(id, dto.password);
+  async verifyPhase(@Param('id') id: string, @Body() dto: VerifyPhaseDto) {
+    return this.phasesService.verify(id, dto.password, dto.answer);
   }
 }
