@@ -1,0 +1,31 @@
+app = "ctfguide"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3001"
+  NODE_ENV = "production"
+  DB_HOST = "127.0.0.1"
+  DB_PORT = "5432"
+  DB_USERNAME = "ctfguide"
+  DB_PASSWORD = "ctfguide_pwd"
+  DB_DATABASE = "ctfguide"
+  DATA_DIR = "/data"
+
+[mounts]
+  source = "ctfguide_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
