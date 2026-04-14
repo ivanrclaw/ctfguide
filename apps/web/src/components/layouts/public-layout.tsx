@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export function PublicLayout() {
   return (
@@ -11,6 +12,7 @@ export function PublicLayout() {
             <span className="text-xl font-bold tracking-tight">CTF Guide</span>
           </Link>
           <nav className="flex items-center gap-2">
+            <ThemeToggle />
             <Button variant="ghost" asChild>
               <Link to="/login">Sign In</Link>
             </Button>

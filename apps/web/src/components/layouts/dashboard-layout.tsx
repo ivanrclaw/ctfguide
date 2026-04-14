@@ -1,5 +1,6 @@
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme-toggle';
 import { useAuth } from '@/contexts/auth-context';
 import { BookOpen, LogOut, User } from 'lucide-react';
 
@@ -25,6 +26,7 @@ export function DashboardLayout() {
               <User className="h-4 w-4" />
               <span>{user?.username}</span>
             </div>
+            <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Sign Out
