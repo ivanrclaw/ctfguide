@@ -13,6 +13,22 @@ export interface User {
   updatedAt: string
 }
 
+export interface RegisterDto {
+  email: string
+  username: string
+  password: string
+}
+
+export interface LoginDto {
+  email: string
+  password: string
+}
+
+export interface AuthResponse {
+  access_token: string
+  user: Pick<User, 'id' | 'email' | 'username'>
+}
+
 export interface CtfGuide {
   id: string
   title: string
@@ -44,4 +60,12 @@ export interface GuideStep {
   title: string
   content: string
   hint: string
+}
+
+export interface CreateGuideDto {
+  title: string
+  description: string
+  ctfName: string
+  category: GuideCategory
+  difficulty?: Difficulty
 }

@@ -13,6 +13,10 @@
   },
   "packageManager": "pnpm@10.7.0",
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "@nestjs/core"]
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "@nestjs/core",
+      "bcrypt"
+    ]
   }
 }
