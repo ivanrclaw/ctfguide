@@ -1,7 +1,8 @@
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Pencil, Globe } from 'lucide-react';
 
 const categoryColors: Record<string, string> = {
   web: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
@@ -30,6 +31,7 @@ interface Guide {
   difficulty: string;
   authorId: string;
   published: boolean;
+  slug?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,16 +42,44 @@ interface GuideCardProps {
 }
 
 export function GuideCard({ guide, onDelete }: GuideCardProps) {
+  const navigate = useNavigate();
+
   return (
-    <Card>
+    <Card className="group cursor-pointer transition-shadow hover:shadow-md" onClick={() => navigate(`/editor/${guide.id}`)}>
       <CardHeader className="flex flex-row items-start justify-between space-y-0">
         <div className="space-y-1">
           <CardTitle className="text-lg">{guide.title}</CardTitle>
           <p className="text-sm text-muted-foreground">{guide.ctfName}</p>
         </div>
-        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => onDelete(guide.id)}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          {guide.published && (
+            <Button variant="ghost" size="icon" className="text-green-500" title="Published">
+              <Globe className="h-4 w-4" />
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/editor/${guide.id}`);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(guide.id);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {guide.description && (

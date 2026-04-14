@@ -6,6 +6,8 @@ import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { GuidesModule } from './guides/guides.module';
+import { PhasesModule } from './phases/phases.module';
+import { PublicModule } from './public/public.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
 
@@ -28,6 +30,8 @@ import { Reflector } from '@nestjs/core';
     UsersModule,
     AuthModule,
     GuidesModule,
+    PhasesModule,
+    PublicModule,
   ],
   controllers: [AppController],
   providers: [

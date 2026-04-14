@@ -1,5 +1,6 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../users/user.entity';
+import { Phase } from '../phases/phase.entity';
 
 @Entity('guides')
 export class Guide {
@@ -24,12 +25,18 @@ export class Guide {
   @Column({ default: false })
   published: boolean;
 
+  @Column({ unique: true, nullable: true })
+  slug: string;
+
   @ManyToOne(() => User, (user) => user.guides, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'authorId' })
   author: User;
 
   @Column()
   authorId: string;
+
+  @OneToMany(() => Phase, (phase) => phase.guide, { eager: true, cascade: true })
+  phases: Phase[];
 
   @CreateDateColumn()
   createdAt: Date;
