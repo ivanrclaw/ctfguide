@@ -31,12 +31,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy built API
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package.json ./
-
-# Copy API node_modules (for production deps)
-COPY --from=builder /app/apps/api/node_modules ./node_modules
+# Copy entire API directory (including node_modules with resolved symlinks)
+COPY --from=builder /app/apps/api/ ./
 
 # Rebuild bcrypt for this Node ABI (native module!)
 RUN npm rebuild bcrypt 2>/dev/null || npm rebuild
