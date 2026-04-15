@@ -351,7 +351,7 @@ export function Editor() {
         {
           method: 'POST',
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            Authorization: `Bearer ${localStorage.getItem('ctfguide_token')}`,
           },
           body: formData,
         },
