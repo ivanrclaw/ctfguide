@@ -45,6 +45,7 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { CollaboratorsPanel } from '@/components/collaborators-panel';
 
 interface Phase {
   id: string;
@@ -481,6 +482,10 @@ export function Editor() {
               {t('editor.publishAndShare')}
             </Button>
           )}
+          <CollaboratorsPanel
+            guideId={guide!.id}
+            onInviteSent={() => fetchGuide()}
+          />
         </div>
       </div>
 

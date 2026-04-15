@@ -1,6 +1,7 @@
 import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, OneToMany } from 'typeorm';
 import { User } from '../users/user.entity';
 import { Phase } from '../phases/phase.entity';
+import { Invitation } from '../invitations/invitation.entity';
 
 @Entity('guides')
 export class Guide {
@@ -37,6 +38,9 @@ export class Guide {
 
   @OneToMany(() => Phase, (phase) => phase.guide, { eager: true, cascade: true })
   phases: Phase[];
+
+  @OneToMany(() => Invitation, (invitation) => invitation.guide, { cascade: true })
+  invitations: Invitation[];
 
   @CreateDateColumn()
   createdAt: Date;

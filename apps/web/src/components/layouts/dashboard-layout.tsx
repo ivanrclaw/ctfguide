@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageToggle } from '@/components/language-toggle';
 import { useAuth } from '@/contexts/auth-context';
+import { InvitationNotification } from '@/components/invitation-notification';
 import { BookOpen, LogOut, User } from 'lucide-react';
 
 export function DashboardLayout() {
@@ -29,6 +30,7 @@ export function DashboardLayout() {
               <User className="h-4 w-4" />
               <span>{user?.username}</span>
             </div>
+            <InvitationNotification />
             <LanguageToggle />
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={handleLogout}>

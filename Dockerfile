@@ -18,6 +18,8 @@ COPY apps/web/ apps/web/
 RUN pnpm install --frozen-lockfile
 
 # Build shared package first, then all apps
+# Set VITE_API_URL for production build (frontend uses /api as relative path)
+ENV VITE_API_URL=/api
 RUN pnpm run build
 
 # Prune dev dependencies to reduce image size
@@ -48,15 +50,18 @@ COPY --from=builder /app/apps/web/dist ./apps/api/client
 COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+# Generate a secure JWT_SECRET at build time if not provided
+ARG JWT_SECRET=ctfguide_prod_change_this_in_fly_secrets
+
 # Environment defaults
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV DB_HOST=127.0.0.1
 ENV DB_PORT=5432
 ENV DB_USERNAME=ctfguide
-ENV DB_PASSWORD=ctfguide_pwd
 ENV DB_DATABASE=ctfguide
 ENV DATA_DIR=/data
+ENV JWT_SECRET=${JWT_SECRET}
 
 # Data volume for PostgreSQL + uploads
 VOLUME ["/data"]

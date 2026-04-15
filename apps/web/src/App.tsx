@@ -8,21 +8,24 @@ import { RegisterPage } from '@/pages/register';
 import { Dashboard } from '@/pages/dashboard';
 import { Editor } from '@/pages/editor';
 import { PublicView } from '@/pages/public-view';
+import { WebSocketProvider } from '@/contexts/websocket-context';
 
 function App() {
   return (
-    <Routes>
-      <Route element={<PublicLayout />}>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/view/:slug" element={<PublicView />} />
-      </Route>
-      <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/editor/:guideId" element={<Editor />} />
-      </Route>
-    </Routes>
+    <WebSocketProvider>
+      <Routes>
+        <Route element={<PublicLayout />}>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/view/:slug" element={<PublicView />} />
+        </Route>
+        <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/editor/:guideId" element={<Editor />} />
+        </Route>
+      </Routes>
+    </WebSocketProvider>
   );
 }
 

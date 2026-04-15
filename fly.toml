@@ -10,7 +10,6 @@ primary_region = "ams"
   DB_HOST = "127.0.0.1"
   DB_PORT = "5432"
   DB_USERNAME = "ctfguide"
-  DB_PASSWORD = "ctfguide_pwd"
   DB_DATABASE = "ctfguide"
   DATA_DIR = "/data"
 

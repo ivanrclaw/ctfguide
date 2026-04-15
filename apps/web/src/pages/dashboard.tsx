@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import { GuideCard } from '@/components/guide-card';
 import { CreateGuideDialog } from '@/components/create-guide-dialog';
+import { CollaboratedGuidesSection } from '@/components/collaborated-guides-section';
 import { BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -67,6 +68,8 @@ export function Dashboard() {
         </div>
         <CreateGuideDialog onCreated={fetchGuides} />
       </div>
+
+      <CollaboratedGuidesSection />
 
       {guides.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
