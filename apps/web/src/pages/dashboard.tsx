@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import { GuideCard } from '@/components/guide-card';
 import { CreateGuideDialog } from '@/components/create-guide-dialog';
@@ -19,6 +20,7 @@ interface Guide {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation('common');
   const [guides, setGuides] = useState<Guide[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -27,31 +29,31 @@ export function Dashboard() {
       const data = await api.get<Guide[]>('/guides');
       setGuides(data);
     } catch {
-      toast.error('Failed to load guides');
+      toast.error(t('dashboard.errorLoadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchGuides();
   }, [fetchGuides]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this guide?')) return;
+    if (!confirm(t('dashboard.confirmDelete'))) return;
     try {
       await api.delete(`/guides/${id}`);
-      toast.success('Guide deleted');
+      toast.success(t('dashboard.successDeleted'));
       setGuides((prev) => prev.filter((g) => g.id !== id));
     } catch {
-      toast.error('Failed to delete guide');
+      toast.error(t('dashboard.errorDeleteFailed'));
     }
   };
 
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
+        <p className="text-muted-foreground">{t('dashboard.loading')}</p>
       </div>
     );
   }
@@ -60,8 +62,8 @@ export function Dashboard() {
     <div>
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">My Guides</h1>
-          <p className="text-muted-foreground">Manage your CTF walkthrough guides</p>
+          <h1 className="text-3xl font-bold">{t('dashboard.title')}</h1>
+          <p className="text-muted-foreground">{t('dashboard.subtitle')}</p>
         </div>
         <CreateGuideDialog onCreated={fetchGuides} />
       </div>
@@ -69,8 +71,8 @@ export function Dashboard() {
       {guides.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-12 text-center">
           <BookOpen className="mb-4 h-12 w-12 text-muted-foreground" />
-          <h2 className="mb-2 text-xl font-semibold">No guides yet</h2>
-          <p className="mb-6 text-muted-foreground">Create your first CTF guide and start sharing your knowledge</p>
+          <h2 className="mb-2 text-xl font-semibold">{t('dashboard.noGuidesYet')}</h2>
+          <p className="mb-6 text-muted-foreground">{t('dashboard.noGuidesDescription')}</p>
           <CreateGuideDialog onCreated={fetchGuides} />
         </div>
       ) : (

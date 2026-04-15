@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { GuidesModule } from './guides/guides.module';
 import { PhasesModule } from './phases/phases.module';
 import { PublicModule } from './public/public.module';
+import { UploadsModule } from './uploads/uploads.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
 
@@ -32,6 +33,7 @@ import { Reflector } from '@nestjs/core';
     GuidesModule,
     PhasesModule,
     PublicModule,
+    UploadsModule,
   ],
   controllers: [AppController],
   providers: [

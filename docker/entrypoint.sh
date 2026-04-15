@@ -11,6 +11,7 @@ chown postgres:postgres "$DATA_DIR"
 
 # Create upload directory for future file uploads
 mkdir -p "$UPLOAD_DIR"
+chmod 777 "$UPLOAD_DIR"
 
 # Initialize PostgreSQL data directory if it doesn't exist
 if [ ! -f "$PGDATA/PG_VERSION" ]; then

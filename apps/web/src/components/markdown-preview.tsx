@@ -36,6 +36,17 @@ export function MarkdownPreview({ content, className = '' }: MarkdownPreviewProp
               </code>
             );
           },
+          img({ src, alt, ...props }) {
+            return (
+              <img
+                src={src}
+                alt={alt || ''}
+                className="max-w-full rounded-md border shadow-sm"
+                loading="lazy"
+                {...props}
+              />
+            );
+          },
           table({ children }) {
             return (
               <div className="overflow-x-auto">

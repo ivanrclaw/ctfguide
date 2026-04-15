@@ -12,6 +12,9 @@ async function bootstrap() {
   // Enable CORS for the web frontend
   app.enableCors();
 
+  // Serve uploaded files publicly at /uploads/ (before global prefix)
+  app.useStaticAssets('/data/uploads', { prefix: '/uploads/' });
+
   // Set global prefix for API routes
   app.setGlobalPrefix('api');
 

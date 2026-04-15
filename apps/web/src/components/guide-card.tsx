@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,24 @@ const difficultyColors: Record<string, string> = {
   insane: 'bg-red-500/10 text-red-500 border-red-500/20',
 };
 
+const categoryKeyMap: Record<string, string> = {
+  web: 'landing.categoryWeb',
+  pwn: 'landing.categoryPwn',
+  reverse: 'landing.categoryReverse',
+  crypto: 'landing.categoryCrypto',
+  forensics: 'landing.categoryForensics',
+  misc: 'landing.categoryMisc',
+  osint: 'landing.categoryOsint',
+};
+
+const difficultyKeyMap: Record<string, string> = {
+  beginner: 'createGuide.difficultyBeginner',
+  easy: 'createGuide.difficultyEasy',
+  medium: 'createGuide.difficultyMedium',
+  hard: 'createGuide.difficultyHard',
+  insane: 'createGuide.difficultyInsane',
+};
+
 interface Guide {
   id: string;
   title: string;
@@ -43,6 +62,7 @@ interface GuideCardProps {
 
 export function GuideCard({ guide, onDelete }: GuideCardProps) {
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
 
   return (
     <Card className="group cursor-pointer transition-shadow hover:shadow-md" onClick={() => navigate(`/editor/${guide.id}`)}>
@@ -53,7 +73,7 @@ export function GuideCard({ guide, onDelete }: GuideCardProps) {
         </div>
         <div className="flex items-center gap-1">
           {guide.published && (
-            <Button variant="ghost" size="icon" className="text-green-500" title="Published">
+            <Button variant="ghost" size="icon" className="text-green-500" title={t('guideCard.published')}>
               <Globe className="h-4 w-4" />
             </Button>
           )}
@@ -87,13 +107,13 @@ export function GuideCard({ guide, onDelete }: GuideCardProps) {
         )}
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={categoryColors[guide.category] || ''}>
-            {guide.category}
+            {t(categoryKeyMap[guide.category] || guide.category)}
           </Badge>
           <Badge variant="outline" className={difficultyColors[guide.difficulty] || ''}>
-            {guide.difficulty}
+            {t(difficultyKeyMap[guide.difficulty] || guide.difficulty)}
           </Badge>
           {!guide.published && (
-            <Badge variant="secondary">Draft</Badge>
+            <Badge variant="secondary">{t('guideCard.draft')}</Badge>
           )}
         </div>
       </CardContent>

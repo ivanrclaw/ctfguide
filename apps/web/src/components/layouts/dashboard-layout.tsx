@@ -1,12 +1,15 @@
 import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LanguageToggle } from '@/components/language-toggle';
 import { useAuth } from '@/contexts/auth-context';
 import { BookOpen, LogOut, User } from 'lucide-react';
 
 export function DashboardLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
 
   const handleLogout = () => {
     logout();
@@ -26,10 +29,11 @@ export function DashboardLayout() {
               <User className="h-4 w-4" />
               <span>{user?.username}</span>
             </div>
+            <LanguageToggle />
             <ThemeToggle />
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
-              Sign Out
+              {t('dashboardLayout.signOut')}
             </Button>
           </div>
         </div>
@@ -39,7 +43,7 @@ export function DashboardLayout() {
           <Button variant="ghost" asChild>
             <Link to="/dashboard">
               <BookOpen className="mr-2 h-4 w-4" />
-              My Guides
+              {t('dashboardLayout.myGuides')}
             </Link>
           </Button>
         </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api';
 import { MarkdownPreview } from '@/components/markdown-preview';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ import {
   Brain,
   Cloud,
   CloudOff,
+  ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -138,6 +140,7 @@ function SortablePhaseItem({
 export function Editor() {
   const { guideId } = useParams<{ guideId: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation('common');
   const [guide, setGuide] = useState<Guide | null>(null);
   const [phases, setPhases] = useState<Phase[]>([]);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
@@ -145,6 +148,8 @@ export function Editor() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   const activePhase = phases.find((p) => p.id === activePhaseId);
 
@@ -152,6 +157,7 @@ export function Editor() {
   const pendingChanges = useRef<Map<string, Partial<Phase>>>(new Map());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUnmounted = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -172,12 +178,12 @@ export function Editor() {
         setShareUrl(`${window.location.origin}/view/${data.slug}`);
       }
     } catch {
-      toast.error('Failed to load guide');
+      toast.error(t('editor.errorLoadGuide'));
       navigate('/dashboard');
     } finally {
       setIsLoading(false);
     }
-  }, [guideId, navigate]);
+  }, [guideId, navigate, t]);
 
   useEffect(() => {
     fetchGuide();
@@ -209,10 +215,10 @@ export function Editor() {
     } catch {
       if (!isUnmounted.current) {
         setSaveStatus('unsaved');
-        toast.error('Auto-save failed');
+        toast.error(t('editor.errorAutoSave'));
       }
     }
-  }, []);
+  }, [t]);
 
   // Schedule auto-save with debounce
   const scheduleSave = useCallback(() => {
@@ -247,12 +253,12 @@ export function Editor() {
       setPhases((prev) => [...prev, phase]);
       setActivePhaseId(phase.id);
     } catch {
-      toast.error('Failed to create phase');
+      toast.error(t('editor.errorCreatePhase'));
     }
   };
 
   const deletePhase = async (phaseId: string) => {
-    if (!confirm('Delete this phase?')) return;
+    if (!confirm(t('editor.confirmDeletePhase'))) return;
     try {
       await api.delete(`/phases/${phaseId}`);
       pendingChanges.current.delete(phaseId);
@@ -261,9 +267,9 @@ export function Editor() {
         const remaining = phases.filter((p) => p.id !== phaseId);
         setActivePhaseId(remaining[0]?.id || null);
       }
-      toast.success('Phase deleted');
+      toast.success(t('editor.successPhaseDeleted'));
     } catch {
-      toast.error('Failed to delete phase');
+      toast.error(t('editor.errorDeletePhase'));
     }
   };
 
@@ -288,7 +294,7 @@ export function Editor() {
         phaseIds: withNewOrder.map((p) => p.id),
       });
     } catch {
-      toast.error('Failed to reorder phases');
+      toast.error(t('editor.errorReorderPhases'));
       setPhases(phases); // revert
     }
   };
@@ -300,9 +306,9 @@ export function Editor() {
       const url = `${window.location.origin}/view/${slug}`;
       setShareUrl(url);
       setGuide((prev) => (prev ? { ...prev, published: true, slug } : prev));
-      toast.success('Guide published!');
+      toast.success(t('editor.successPublished'));
     } catch {
-      toast.error('Failed to publish guide');
+      toast.error(t('editor.errorPublishFailed'));
     }
   };
 
@@ -312,9 +318,9 @@ export function Editor() {
       await api.post(`/phases/guide/${guideId}/unpublish`, {});
       setShareUrl(null);
       setGuide((prev) => (prev ? { ...prev, published: false, slug: null } : prev));
-      toast.success('Guide unpublished');
+      toast.success(t('editor.successUnpublished'));
     } catch {
-      toast.error('Failed to unpublish guide');
+      toast.error(t('editor.errorUnpublishFailed'));
     }
   };
 
@@ -326,10 +332,96 @@ export function Editor() {
     }
   };
 
+  const uploadImage = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error(t('editor.errorInvalidImageType'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(t('editor.errorImageTooLarge'));
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(
+        (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api') + '/uploads/image',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: formData,
+        },
+      );
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+
+      // Insert markdown image at cursor position
+      const imageMarkdown = `![${file.name}](${data.url})`;
+      if (activePhaseId && textareaRef.current) {
+        const textarea = textareaRef.current;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const currentContent = phases.find((p) => p.id === activePhaseId)?.content || '';
+        const newContent =
+          currentContent.substring(0, start) +
+          imageMarkdown +
+          currentContent.substring(end);
+        updatePhaseContent(activePhaseId, 'content', newContent);
+      } else if (activePhaseId) {
+        const currentContent = phases.find((p) => p.id === activePhaseId)?.content || '';
+        updatePhaseContent(activePhaseId, 'content', currentContent + '\n' + imageMarkdown);
+      }
+      toast.success(t('editor.successImageUploaded'));
+    } catch {
+      toast.error(t('editor.errorImageUpload'));
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleImageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingImage(false);
+    const files = Array.from(e.dataTransfer.files);
+    files.forEach(uploadImage);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDraggingImage(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set false if leaving the drop zone itself
+    if (e.currentTarget === e.target) {
+      setIsDraggingImage(false);
+    }
+  };
+
+  const handlePasteImage = (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    items.forEach((item) => {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) uploadImage(file);
+      }
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <p className="text-muted-foreground">Loading editor...</p>
+        <p className="text-muted-foreground">{t('editor.loadingEditor')}</p>
       </div>
     );
   }
@@ -341,7 +433,7 @@ export function Editor() {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="mr-1 h-4 w-4" />
-            Back
+            {t('editor.back')}
           </Button>
           <div>
             <h1 className="text-lg font-semibold">{guide?.title}</h1>
@@ -354,19 +446,19 @@ export function Editor() {
             {saveStatus === 'saved' && (
               <>
                 <Cloud className="h-3.5 w-3.5 text-green-500" />
-                <span className="text-green-600">Saved</span>
+                <span className="text-green-600">{t('editor.saved')}</span>
               </>
             )}
             {saveStatus === 'saving' && (
               <>
                 <Cloud className="h-3.5 w-3.5 animate-pulse text-blue-500" />
-                <span className="text-blue-600">Saving...</span>
+                <span className="text-blue-600">{t('editor.saving')}</span>
               </>
             )}
             {saveStatus === 'unsaved' && (
               <>
                 <CloudOff className="h-3.5 w-3.5 text-orange-500" />
-                <span className="text-orange-600">Unsaved</span>
+                <span className="text-orange-600">{t('editor.unsaved')}</span>
               </>
             )}
           </div>
@@ -380,13 +472,13 @@ export function Editor() {
                 </Button>
               </div>
               <Button variant="outline" size="sm" onClick={unpublish}>
-                Unpublish
+                {t('editor.unpublish')}
               </Button>
             </>
           ) : (
             <Button size="sm" onClick={publish}>
               <Share2 className="mr-1 h-4 w-4" />
-              Publish & Share
+              {t('editor.publishAndShare')}
             </Button>
           )}
         </div>
@@ -397,7 +489,7 @@ export function Editor() {
         {/* Sidebar: Phase list with drag & drop */}
         <div className="w-64 shrink-0 border-r bg-muted/30 overflow-y-auto">
           <div className="flex items-center justify-between p-3">
-            <span className="text-sm font-medium">Phases</span>
+            <span className="text-sm font-medium">{t('editor.phases')}</span>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={addPhase}>
               <Plus className="h-4 w-4" />
             </Button>
@@ -427,7 +519,7 @@ export function Editor() {
           </DndContext>
           {phases.length === 0 && (
             <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-              No phases yet. Click + to add one.
+              {t('editor.noPhases')}
             </div>
           )}
         </div>
@@ -443,13 +535,13 @@ export function Editor() {
                     value={activePhase.title}
                     onChange={(e) => updatePhaseContent(activePhase.id, 'title', e.target.value)}
                     className="h-8 border-none text-lg font-semibold shadow-none focus-visible:ring-0"
-                    placeholder="Phase title"
+                    placeholder={t('editor.phaseTitlePlaceholder')}
                   />
                 </div>
                 {/* Unlock type selector */}
                 <div className="mt-2 flex items-end gap-4">
                   <div className="flex flex-col gap-1">
-                    <Label className="text-xs text-muted-foreground">Unlock method</Label>
+                    <Label className="text-xs text-muted-foreground">{t('editor.unlockMethod')}</Label>
                     <Select
                       value={activePhase.unlockType}
                       onValueChange={(val) =>
@@ -462,17 +554,17 @@ export function Editor() {
                       <SelectContent>
                         <SelectItem value="none">
                           <span className="flex items-center gap-1.5">
-                            <Eye className="h-3 w-3" /> Free access
+                            <Eye className="h-3 w-3" /> {t('editor.unlockNone')}
                           </span>
                         </SelectItem>
                         <SelectItem value="password">
                           <span className="flex items-center gap-1.5">
-                            <Lock className="h-3 w-3" /> Password
+                            <Lock className="h-3 w-3" /> {t('editor.unlockPassword')}
                           </span>
                         </SelectItem>
                         <SelectItem value="llm">
                           <span className="flex items-center gap-1.5">
-                            <Brain className="h-3 w-3" /> AI Question
+                            <Brain className="h-3 w-3" /> {t('editor.unlockAiQuestion')}
                           </span>
                         </SelectItem>
                       </SelectContent>
@@ -481,14 +573,14 @@ export function Editor() {
 
                   {activePhase.unlockType === 'password' && (
                     <div className="flex flex-col gap-1">
-                      <Label className="text-xs text-muted-foreground">Password</Label>
+                      <Label className="text-xs text-muted-foreground">{t('editor.passwordLabel')}</Label>
                       <Input
                         value={activePhase.password}
                         onChange={(e) =>
                           updatePhaseContent(activePhase.id, 'password', e.target.value)
                         }
                         className="h-8 w-40 text-xs"
-                        placeholder="Password"
+                        placeholder={t('editor.passwordPlaceholder')}
                         type="text"
                       />
                     </div>
@@ -497,25 +589,25 @@ export function Editor() {
                   {activePhase.unlockType === 'llm' && (
                     <>
                       <div className="flex flex-col gap-1">
-                        <Label className="text-xs text-muted-foreground">Question</Label>
+                        <Label className="text-xs text-muted-foreground">{t('editor.questionLabel')}</Label>
                         <Input
                           value={activePhase.question}
                           onChange={(e) =>
                             updatePhaseContent(activePhase.id, 'question', e.target.value)
                           }
                           className="h-8 w-48 text-xs"
-                          placeholder="Question for the user"
+                          placeholder={t('editor.questionPlaceholder')}
                         />
                       </div>
                       <div className="flex flex-col gap-1">
-                        <Label className="text-xs text-muted-foreground">Expected answer</Label>
+                        <Label className="text-xs text-muted-foreground">{t('editor.expectedAnswer')}</Label>
                         <Input
                           value={activePhase.answer}
                           onChange={(e) =>
                             updatePhaseContent(activePhase.id, 'answer', e.target.value)
                           }
                           className="h-8 w-48 text-xs"
-                          placeholder="Reference answer (AI will compare)"
+                          placeholder={t('editor.expectedAnswerPlaceholder')}
                         />
                       </div>
                     </>
@@ -525,30 +617,75 @@ export function Editor() {
 
               {/* Split view: editor + preview */}
               <div className="flex flex-1 overflow-hidden">
-                {/* Markdown editor */}
-                <div className="flex-1 overflow-y-auto border-r">
+                {/* Markdown editor with image drag & drop */}
+                <div
+                  className={`relative flex-1 overflow-y-auto border-r ${
+                    isDraggingImage ? 'bg-primary/5' : ''
+                  }`}
+                  onDrop={handleImageDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                >
+                  {/* Drop overlay */}
+                  {isDraggingImage && (
+                    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-primary/10 border-2 border-dashed border-primary rounded-lg m-2">
+                      <div className="flex flex-col items-center gap-2 text-primary">
+                        <ImageIcon className="h-10 w-10" />
+                        <span className="text-sm font-medium">{t('editor.dropImage')}</span>
+                      </div>
+                    </div>
+                  )}
+                  {/* Uploading indicator */}
+                  {isUploadingImage && (
+                    <div className="absolute top-2 right-2 z-20 flex items-center gap-2 rounded-md bg-background border px-3 py-1.5 text-xs shadow-md">
+                      <div className="h-3 w-3 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                      {t('editor.uploadingImage')}
+                    </div>
+                  )}
                   <textarea
+                    ref={textareaRef}
                     value={activePhase.content}
                     onChange={(e) =>
                       updatePhaseContent(activePhase.id, 'content', e.target.value)
                     }
+                    onPaste={handlePasteImage}
                     className="h-full w-full resize-none bg-background p-4 font-mono text-sm outline-none"
-                    placeholder={"Write your markdown here...\n\n# Phase 1: Reconnaissance\n\n## Steps\n1. Scan the target with nmap\n2. Enumerate directories\n3. Find the vulnerability\n\n```bash\nnmap -sV -sC target\n```"}
+                    placeholder={t('editor.writeMarkdownPlaceholder')}
                     spellCheck={false}
                   />
+                  {/* Image upload button */}
+                  <div className="absolute bottom-3 right-3">
+                    <label
+                      className="flex cursor-pointer items-center gap-1.5 rounded-md bg-background border px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm hover:bg-muted transition-colors"
+                      title={t('editor.uploadImage')}
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" />
+                      {t('editor.addImage')}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) uploadImage(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 {/* Preview */}
                 <div className="flex-1 overflow-y-auto bg-muted/20 p-4">
                   <div className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
                     <Eye className="h-3 w-3" />
-                    Preview
+                    {t('editor.preview')}
                   </div>
                   {activePhase.content ? (
                     <MarkdownPreview content={activePhase.content} />
                   ) : (
                     <div className="flex h-full items-center justify-center text-muted-foreground">
-                      <p>Start writing to see a preview</p>
+                      <p>{t('editor.startWritingPreview')}</p>
                     </div>
                   )}
                 </div>
@@ -557,8 +694,8 @@ export function Editor() {
           ) : (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <div className="text-center">
-                <p className="mb-2 text-lg">Select a phase to edit</p>
-                <p className="text-sm">Or create a new one from the sidebar</p>
+                <p className="mb-2 text-lg">{t('editor.selectPhaseToEdit')}</p>
+                <p className="text-sm">{t('editor.createPhaseFromSidebar')}</p>
               </div>
             </div>
           )}
