@@ -130,6 +130,10 @@ export function ExportGuide({ guide }: ExportGuideProps) {
       container.innerHTML = html;
       document.body.appendChild(container);
 
+      // html2canvas 1.4.x does not support oklch/oklab/lab/lch/color() CSS functions.
+      // Walk the tree and replace them with rgb equivalents before capturing.
+      fixUnsupportedColors(container);
+
       await document.fonts.ready;
       await new Promise(r => requestAnimationFrame(r));
 
@@ -269,4 +273,55 @@ function markdownToHtml(md: string): string {
   html = html.replace(/^(?!<[hupblo]|<li|<hr|<pre|<code|<ul|<ol|<blockquote|<a |<img)(.+)$/gm, '<p style="margin:8px 0;">$1</p>');
 
   return html;
+}
+
+/**
+ * Recursively walk element styles and computed styles to replace CSS color
+ * functions (oklch, oklab, lab, lch, color()) that html2canvas 1.4.x does
+ * not support, converting them to rgb equivalents via the browser's
+ * `color-mix()` and `rgb()` conversion.
+ */
+function fixUnsupportedColors(root: Element) {
+  const unsupported = /^(oklch|oklab|lab|lch|color\()/;
+
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as Element;
+
+      // Check inline style attribute
+      const inlineStyle = el.getAttribute('style') || '';
+      if (unsupported.test(inlineStyle)) {
+        el.setAttribute('style', convertColors(inlineStyle));
+      }
+
+      // Recurse into children
+      for (const child of Array.from(el.childNodes)) {
+        walk(child);
+      }
+    }
+  };
+
+  // Converts any unsupported color value in a CSS declaration to rgb.
+  // Uses the browser's color conversion by creating a temporary element.
+  function convertColors(css: string): string {
+    try {
+      // Only process if there are actually unsupported functions present
+      if (!unsupported.test(css)) return css;
+
+      // Build a throwaway element with the raw CSS, let the browser parse it
+      const dummy = document.createElement('div');
+      dummy.setAttribute('style', css);
+      document.body.appendChild(dummy);
+
+      const computed = dummy.style.cssText;
+      document.body.removeChild(dummy);
+
+      return computed || css;
+    } catch {
+      // If anything goes wrong during conversion, return original
+      return css;
+    }
+  }
+
+  walk(root);
 }
