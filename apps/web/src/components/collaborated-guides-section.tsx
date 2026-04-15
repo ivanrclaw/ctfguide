@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { getMyCollaboratedGuides } from '../api/invitations';
 import { Users } from 'lucide-react';
 
@@ -15,6 +16,7 @@ interface CollaboratedGuide {
 
 export function CollaboratedGuidesSection() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [collaboratedGuides, setCollaboratedGuides] = useState<CollaboratedGuide[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +57,7 @@ export function CollaboratedGuidesSection() {
             <div
               key={guide.id}
               className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 transition-colors cursor-pointer"
+              onClick={() => navigate(`/editor/${guide.id}`)}
             >
               <div className="flex items-start justify-between mb-2">
                 <h3 className="font-semibold text-gray-900 dark:text-white">

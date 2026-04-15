@@ -178,7 +178,14 @@
     "successImageUploaded": "Image uploaded!",
     "errorImageUpload": "Failed to upload image",
     "errorInvalidImageType": "Only image files are allowed",
-    "errorImageTooLarge": "Image must be smaller than 5MB"
+    "errorImageTooLarge": "Image must be smaller than 5MB",
+    "export": "Export",
+    "exportMarkdown": "Export as Markdown",
+    "exportPdf": "Export as PDF",
+    "exporting": "Exporting...",
+    "exportMarkdownSuccess": "Guide exported as Markdown",
+    "exportPdfSuccess": "Guide exported as PDF",
+    "exportPdfError": "Failed to export PDF"
   },
   "collaboration": {
     "inviteCollaborator": "Invite Collaborator",

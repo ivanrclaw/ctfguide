@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useEffect, useState } from 'react';
+import { createContext, useContext, ReactNode, useEffect, useState, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 interface WebSocketContextType {
@@ -11,46 +11,119 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(undefin
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('ctfguide_token');
+    let alive = true;
 
-    if (!token) {
-      console.warn('No auth token found, WebSocket not connecting');
-      return;
-    }
+    const connect = () => {
+      const token = localStorage.getItem('ctfguide_token');
+      if (!token) {
+        // No token - disconnect and cleanup
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+          if (alive) {
+            setSocket(null);
+            setConnected(false);
+          }
+        }
+        return;
+      }
 
-    // In production, Socket.io connects to same origin; in dev, to the API server
-    const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '');
+      // If already connected, skip
+      if (socketRef.current?.connected) return;
 
-    const socketInstance = io(`${apiUrl}/collaboration`, {
-      path: '/api/socket.io',
-      transports: ['websocket'],
-      auth: { token },
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
+      // If socket exists but disconnected (failed), clean it up first
+      if (socketRef.current && !socketRef.current.connected) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
 
-    socketInstance.on('connect', () => {
-      console.log('WebSocket connected');
-      setConnected(true);
-    });
+      // WebSocket needs the server origin, NOT the /api prefix.
+      // The /api prefix is for REST routes; socket.io uses path: '/api/socket.io' + namespace '/collaboration'
+      const wsUrl = import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
-    socketInstance.on('disconnect', () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-    });
+      const socketInstance = io(`${wsUrl}/collaboration`, {
+        path: '/api/socket.io',
+        transports: ['websocket', 'polling'],
+        auth: { token },
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+      });
 
-    socketInstance.on('connect_error', (error) => {
-      console.error('WebSocket connection error:', error.message);
-      setConnected(false);
-    });
+      socketInstance.on('connect', () => {
+        if (alive) setConnected(true);
+      });
 
-    setSocket(socketInstance);
+      socketInstance.on('disconnect', () => {
+        if (alive) setConnected(false);
+      });
+
+      socketInstance.on('connect_error', () => {
+        if (alive) setConnected(false);
+      });
+
+      socketRef.current = socketInstance;
+      if (alive) setSocket(socketInstance);
+    };
+
+    // Initial attempt
+    connect();
+
+    // Listen for auth-change events
+    const handleAuthChange = () => {
+      setTimeout(() => {
+        if (!alive) return;
+        // Force disconnect and reconnect
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+        }
+        setSocket(null);
+        setConnected(false);
+        connect();
+      }, 200);
+    };
+
+    window.addEventListener('auth-change', handleAuthChange);
+
+    // Poll every 3s to handle edge cases where event is missed
+    const interval = setInterval(() => {
+      if (!alive) return;
+      const token = localStorage.getItem('ctfguide_token');
+      // No token but have socket → disconnect
+      if (!token && socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+        setConnected(false);
+        return;
+      }
+      // Have token but no socket → connect
+      if (token && !socketRef.current) {
+        connect();
+        return;
+      }
+      // Have token and socket but disconnected (failed) and not reconnecting → try again
+      if (token && socketRef.current && !socketRef.current.connected) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+        setConnected(false);
+        connect();
+      }
+    }, 3000);
 
     return () => {
-      socketInstance.disconnect();
+      alive = false;
+      window.removeEventListener('auth-change', handleAuthChange);
+      clearInterval(interval);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, []);
 
@@ -67,4 +140,9 @@ export function useWebSocket() {
     throw new Error('useWebSocket must be used within a WebSocketProvider');
   }
   return context;
+}
+
+// Helper: emit auth-change event from AuthContext
+export function notifyAuthChange() {
+  window.dispatchEvent(new Event('auth-change'));
 }

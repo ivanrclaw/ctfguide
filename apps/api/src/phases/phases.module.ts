@@ -5,9 +5,10 @@ import { Guide } from '../guides/guide.entity';
 import { PhasesController } from './phases.controller';
 import { PhasesService } from './phases.service';
 import { LlmVerifyService } from './llm-verify.service';
+import { InvitationsModule } from '../invitations/invitations.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Phase, Guide])],
+  imports: [TypeOrmModule.forFeature([Phase, Guide]), InvitationsModule],
   controllers: [PhasesController],
   providers: [PhasesService, LlmVerifyService],
   exports: [PhasesService],

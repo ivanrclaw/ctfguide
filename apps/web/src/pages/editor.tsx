@@ -28,6 +28,7 @@ import {
   CloudOff,
   ImageIcon,
 } from 'lucide-react';
+import { ExportGuide } from '@/components/export-guide';
 import { toast } from 'sonner';
 import {
   DndContext,
@@ -46,6 +47,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { CollaboratorsPanel } from '@/components/collaborators-panel';
+import { useAuth } from '@/contexts/auth-context';
+import { useWebSocket } from '@/contexts/websocket-context';
 
 interface Phase {
   id: string;
@@ -142,8 +145,11 @@ export function Editor() {
   const { guideId } = useParams<{ guideId: string }>();
   const navigate = useNavigate();
   const { t } = useTranslation('common');
+  const { user } = useAuth();
+  const { socket } = useWebSocket();
   const [guide, setGuide] = useState<Guide | null>(null);
   const [phases, setPhases] = useState<Phase[]>([]);
+  const [onlineCollaborators, setOnlineCollaborators] = useState<Array<{userId: string; username: string}>>([]);
   const [activePhaseId, setActivePhaseId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -189,6 +195,65 @@ export function Editor() {
   useEffect(() => {
     fetchGuide();
   }, [fetchGuide]);
+
+  // WebSocket collaboration lifecycle
+  useEffect(() => {
+    if (!socket || !guideId || !guide) return;
+
+    // Join the guide room
+    socket.emit('guide:join', { guideId });
+
+    // Listen for collaborators joining
+    socket.on('collaborator:joined', (data) => {
+      setOnlineCollaborators((prev) => {
+        if (prev.some((c) => c.userId === data.userId)) return prev;
+        return [...prev, { userId: data.userId, username: data.username }];
+      });
+    });
+
+    // Listen for collaborators leaving
+    socket.on('collaborator:left', (data) => {
+      setOnlineCollaborators((prev) => prev.filter((c) => c.userId !== data.userId));
+    });
+
+    // Listen for initial collaborator list
+    socket.on('guide:collaborators', (collaborators) => {
+      setOnlineCollaborators(collaborators);
+    });
+
+    // Listen for real-time updates from other users
+    socket.on('guide:updated', (data) => {
+      const { content } = data;
+      if (content?.type === 'phase:update' && content?.phaseId && content?.field) {
+        setPhases((prev) =>
+          prev.map((p) =>
+            p.id === content.phaseId ? { ...p, [content.field]: content.value } : p
+          )
+        );
+      } else if (content?.type === 'phase:reorder' && content?.phaseIds) {
+        // Reorder phases based on new order
+        setPhases((prev) => {
+          const orderMap = new Map<string, number>(content.phaseIds.map((id: string, i: number) => [id, i]));
+          return [...prev]
+            .sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0))
+            .map((p, i) => ({ ...p, order: i }));
+        });
+      } else if (content?.type === 'phase:added' && content?.phase) {
+        setPhases((prev) => [...prev, content.phase]);
+      } else if (content?.type === 'phase:deleted' && content?.phaseId) {
+        setPhases((prev) => prev.filter((p) => p.id !== content.phaseId));
+      }
+    });
+
+    // Leave on cleanup
+    return () => {
+      socket.emit('guide:leave');
+      socket.off('collaborator:joined');
+      socket.off('collaborator:left');
+      socket.off('guide:collaborators');
+      socket.off('guide:updated');
+    };
+  }, [socket, guideId, guide]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -236,6 +301,13 @@ export function Editor() {
     const existing = pendingChanges.current.get(phaseId) || {};
     pendingChanges.current.set(phaseId, { ...existing, [field]: value });
     scheduleSave();
+    // Broadcast change to other collaborators in real-time
+    if (socket?.connected) {
+      socket.emit('guide:update', {
+        guideId,
+        content: { type: 'phase:update', phaseId, field, value },
+      });
+    }
   };
 
   const addPhase = async () => {
@@ -251,6 +323,12 @@ export function Editor() {
         question: '',
         answer: '',
       });
+      if (socket?.connected) {
+        socket.emit('guide:update', {
+          guideId,
+          content: { type: 'phase:added', phase },
+        });
+      }
       setPhases((prev) => [...prev, phase]);
       setActivePhaseId(phase.id);
     } catch {
@@ -262,6 +340,12 @@ export function Editor() {
     if (!confirm(t('editor.confirmDeletePhase'))) return;
     try {
       await api.delete(`/phases/${phaseId}`);
+      if (socket?.connected) {
+        socket.emit('guide:update', {
+          guideId,
+          content: { type: 'phase:deleted', phaseId },
+        });
+      }
       pendingChanges.current.delete(phaseId);
       setPhases((prev) => prev.filter((p) => p.id !== phaseId));
       if (activePhaseId === phaseId) {
@@ -294,6 +378,12 @@ export function Editor() {
       await api.post(`/phases/guide/${guideId}/reorder`, {
         phaseIds: withNewOrder.map((p) => p.id),
       });
+      if (socket?.connected) {
+        socket.emit('guide:update', {
+          guideId,
+          content: { type: 'phase:reorder', phaseIds: withNewOrder.map((p) => p.id) },
+        });
+      }
     } catch {
       toast.error(t('editor.errorReorderPhases'));
       setPhases(phases); // revert
@@ -463,6 +553,24 @@ export function Editor() {
               </>
             )}
           </div>
+          {onlineCollaborators.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <div className="flex -space-x-1">
+                {onlineCollaborators.map((c) => (
+                  <div
+                    key={c.userId}
+                    className="h-5 w-5 rounded-full bg-blue-500 flex items-center justify-center text-[10px] text-white ring-1 ring-background"
+                    title={c.username}
+                  >
+                    {c.username[0].toUpperCase()}
+                  </div>
+                ))}
+              </div>
+              <span>{onlineCollaborators.length} online</span>
+            </div>
+          )}
+          {/* Export dropdown */}
+          {guide && <ExportGuide guide={guide} />}
           {guide?.published ? (
             <>
               <div className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm">
@@ -482,10 +590,12 @@ export function Editor() {
               {t('editor.publishAndShare')}
             </Button>
           )}
-          <CollaboratorsPanel
-            guideId={guide!.id}
-            onInviteSent={() => fetchGuide()}
-          />
+          {guide?.authorId === user?.id && (
+            <CollaboratorsPanel
+              guideId={guide!.id}
+              onInviteSent={() => fetchGuide()}
+            />
+          )}
         </div>
       </div>
 

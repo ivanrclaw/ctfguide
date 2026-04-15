@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { api } from '@/lib/api';
+import { notifyAuthChange } from '@/contexts/websocket-context';
 
 interface AuthUser {
   id: string;
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('ctfguide_token', res.access_token);
     setToken(res.access_token);
     setUser(res.user);
+    notifyAuthChange();
   }, []);
 
   const register = useCallback(async (email: string, username: string, password: string) => {
@@ -50,12 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('ctfguide_token', res.access_token);
     setToken(res.access_token);
     setUser(res.user);
+    notifyAuthChange();
   }, []);
 
   const logout = useCallback(() => {
     localStorage.removeItem('ctfguide_token');
     setToken(null);
     setUser(null);
+    notifyAuthChange();
   }, []);
 
   return (

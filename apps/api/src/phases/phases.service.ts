@@ -5,6 +5,7 @@ import { Phase } from './phase.entity';
 import { Guide } from '../guides/guide.entity';
 import { CreatePhaseDto, UpdatePhaseDto, ReorderPhasesDto } from './dto/phase.dto';
 import { LlmVerifyService } from './llm-verify.service';
+import { InvitationsService } from '../invitations/invitations.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -15,6 +16,7 @@ export class PhasesService {
     @InjectRepository(Guide)
     private guidesRepository: Repository<Guide>,
     private readonly llmVerifyService: LlmVerifyService,
+    private readonly invitationsService: InvitationsService,
   ) {}
 
   async create(userId: string, guideId: string, dto: CreatePhaseDto): Promise<Phase> {
@@ -36,7 +38,8 @@ export class PhasesService {
   async findByGuide(userId: string, guideId: string): Promise<Phase[]> {
     const guide = await this.guidesRepository.findOne({ where: { id: guideId } });
     if (!guide) throw new NotFoundException('Guide not found');
-    if (guide.authorId !== userId) throw new ForbiddenException('Not your guide');
+    const isAuthorized = guide.authorId === userId || await this.invitationsService.isAuthorOrCollaborator(guideId, userId);
+    if (!isAuthorized) throw new ForbiddenException('Not your guide');
 
     return this.phasesRepository.find({
       where: { guideId },
@@ -48,8 +51,8 @@ export class PhasesService {
     const phase = await this.phasesRepository.findOne({ where: { id: phaseId } });
     if (!phase) throw new NotFoundException('Phase not found');
 
-    const guide = await this.guidesRepository.findOne({ where: { id: phase.guideId } });
-    if (!guide || guide.authorId !== userId) throw new ForbiddenException('Not your guide');
+    const isAuthorized = await this.invitationsService.isAuthorOrCollaborator(phase.guideId, userId);
+    if (!isAuthorized) throw new ForbiddenException('Not your guide');
 
     return phase;
   }
@@ -58,8 +61,8 @@ export class PhasesService {
     const phase = await this.phasesRepository.findOne({ where: { id: phaseId } });
     if (!phase) throw new NotFoundException('Phase not found');
 
-    const guide = await this.guidesRepository.findOne({ where: { id: phase.guideId } });
-    if (!guide || guide.authorId !== userId) throw new ForbiddenException('Not your guide');
+    const isAuthorized = await this.invitationsService.isAuthorOrCollaborator(phase.guideId, userId);
+    if (!isAuthorized) throw new ForbiddenException('Not your guide');
 
     Object.assign(phase, dto);
     return this.phasesRepository.save(phase);
@@ -69,8 +72,8 @@ export class PhasesService {
     const phase = await this.phasesRepository.findOne({ where: { id: phaseId } });
     if (!phase) throw new NotFoundException('Phase not found');
 
-    const guide = await this.guidesRepository.findOne({ where: { id: phase.guideId } });
-    if (!guide || guide.authorId !== userId) throw new ForbiddenException('Not your guide');
+    const isAuthorized = await this.invitationsService.isAuthorOrCollaborator(phase.guideId, userId);
+    if (!isAuthorized) throw new ForbiddenException('Not your guide');
 
     await this.phasesRepository.remove(phase);
   }
@@ -78,7 +81,8 @@ export class PhasesService {
   async reorder(userId: string, guideId: string, dto: ReorderPhasesDto): Promise<Phase[]> {
     const guide = await this.guidesRepository.findOne({ where: { id: guideId } });
     if (!guide) throw new NotFoundException('Guide not found');
-    if (guide.authorId !== userId) throw new ForbiddenException('Not your guide');
+    const isAuthorized = guide.authorId === userId || await this.invitationsService.isAuthorOrCollaborator(guideId, userId);
+    if (!isAuthorized) throw new ForbiddenException('Not your guide');
 
     for (let i = 0; i < dto.phaseIds.length; i++) {
       await this.phasesRepository.update(

@@ -223,4 +223,21 @@ export class InvitationsService {
     if (!invitation) throw new ForbiddenException('Not your guide');
     return invitation.guide;
   }
+
+  /**
+   * Check if a user is either the author of a guide or an accepted collaborator.
+   * Returns true if the user has edit access, false otherwise.
+   */
+  async isAuthorOrCollaborator(guideId: string, userId: string): Promise<boolean> {
+    // Check if user is the author
+    const guide = await this.guidesRepository.findOne({ where: { id: guideId } });
+    if (!guide) return false;
+    if (guide.authorId === userId) return true;
+
+    // Check if user is an accepted collaborator
+    const invitation = await this.invitationsRepository.findOne({
+      where: { guideId, invitedUserId: userId, status: InvitationStatus.ACCEPTED },
+    });
+    return !!invitation;
+  }
 }
