@@ -106,15 +106,19 @@ export function ExportGuide({ guide }: ExportGuideProps) {
     setExportingPdf(true);
     try {
       // Dynamically import html2pdf.js (client-side only)
-      const html2pdf = (await import('html2pdf.js')).default;
+      // html2pdf.js is a CJS/UMD module — ESM interop varies by bundler
+      const html2pdfModule = await import('html2pdf.js') as any;
+      const html2pdf = html2pdfModule.default || html2pdfModule;
 
       // Build a clean HTML container for the PDF
       const md = assembleMarkdown(guide);
 
-      // Use a hidden div (off-screen) for PDF rendering
+      // Use a hidden div for PDF rendering — visibility:hidden + absolute position
+      // works better with html2canvas than off-screen positioning (left:-9999px)
       const container = document.createElement('div');
-      container.style.position = 'fixed';
-      container.style.left = '-9999px';
+      container.style.visibility = 'hidden';
+      container.style.position = 'absolute';
+      container.style.left = '0';
       container.style.top = '0';
       container.style.padding = '40px';
       container.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
@@ -131,6 +135,10 @@ export function ExportGuide({ guide }: ExportGuideProps) {
 
       // Temporarily add to DOM for rendering
       document.body.appendChild(container);
+
+      // Wait for fonts and styles to apply before capturing
+      await document.fonts.ready;
+      await new Promise(r => requestAnimationFrame(r));
 
       const safeName = guide.title.replace(/[^a-zA-Z0-9_-]/g, '_');
 
