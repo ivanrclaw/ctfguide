@@ -9,6 +9,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Download, FileText, FileDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface Phase {
   id: string;
@@ -105,16 +107,11 @@ export function ExportGuide({ guide }: ExportGuideProps) {
   const handleExportPdf = useCallback(async () => {
     setExportingPdf(true);
     try {
-      // Dynamically import html2pdf.js (client-side only)
-      // html2pdf.js is a CJS/UMD module — ESM interop varies by bundler
-      const html2pdfModule = await import('html2pdf.js') as any;
-      const html2pdf = html2pdfModule.default || html2pdfModule;
-
-      // Build a clean HTML container for the PDF
+      // Build the PDF from markdown content
       const md = assembleMarkdown(guide);
+      const safeName = guide.title.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-      // Use a hidden div for PDF rendering — visibility:hidden + absolute position
-      // works better with html2canvas than off-screen positioning (left:-9999px)
+      // Create a hidden container for rendering
       const container = document.createElement('div');
       container.style.visibility = 'hidden';
       container.style.position = 'absolute';
@@ -127,35 +124,53 @@ export function ExportGuide({ guide }: ExportGuideProps) {
       container.style.fontSize = '14px';
       container.style.lineHeight = '1.6';
       container.style.background = '#ffffff';
-      container.style.width = '794px'; // A4 width at 96dpi
+      container.style.width = '794px';
 
-      // Parse basic markdown to HTML for PDF rendering
       const html = markdownToHtml(md);
       container.innerHTML = html;
-
-      // Temporarily add to DOM for rendering
       document.body.appendChild(container);
 
-      // Wait for fonts and styles to apply before capturing
       await document.fonts.ready;
       await new Promise(r => requestAnimationFrame(r));
 
-      const safeName = guide.title.replace(/[^a-zA-Z0-9_-]/g, '_');
-
       try {
-        await html2pdf()
-          .set({
-            margin: [15, 15, 15, 15],
-            filename: `${safeName}.pdf`,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: { scale: 2, useCORS: true },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          })
-          .from(container)
-          .save();
+        // Use html2canvas to render the container to a canvas
+        const canvas = await html2canvas(container, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: '#ffffff',
+        });
+
+        // Create PDF with jsPDF
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'mm',
+          format: 'a4',
+        });
+
+        const pageWidth = pdf.internal.pageSize.getWidth();
+        const pageHeight = pdf.internal.pageSize.getHeight();
+        const imgWidth = pageWidth;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        // Add the first page
+        pdf.addImage(canvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        // Add subsequent pages if needed
+        while (heightLeft > 0) {
+          position = heightLeft - imgHeight;
+          pdf.addPage();
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.98), 'JPEG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
+
+        pdf.save(`${safeName}.pdf`);
         toast.success(t('editor.exportPdfSuccess'));
       } finally {
-        // Always clean up the container
         if (container.parentNode) {
           container.parentNode.removeChild(container);
         }
