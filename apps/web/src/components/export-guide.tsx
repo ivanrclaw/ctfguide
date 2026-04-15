@@ -111,14 +111,19 @@ export function ExportGuide({ guide }: ExportGuideProps) {
       // Build a clean HTML container for the PDF
       const md = assembleMarkdown(guide);
 
-      // Use a hidden div, render markdown as HTML, then convert to PDF
+      // Use a hidden div (off-screen) for PDF rendering
       const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-9999px';
+      container.style.top = '0';
       container.style.padding = '40px';
       container.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       container.style.color = '#1a1a1a';
       container.style.maxWidth = '700px';
       container.style.fontSize = '14px';
       container.style.lineHeight = '1.6';
+      container.style.background = '#ffffff';
+      container.style.width = '794px'; // A4 width at 96dpi
 
       // Parse basic markdown to HTML for PDF rendering
       const html = markdownToHtml(md);
@@ -129,19 +134,24 @@ export function ExportGuide({ guide }: ExportGuideProps) {
 
       const safeName = guide.title.replace(/[^a-zA-Z0-9_-]/g, '_');
 
-      await html2pdf()
-        .set({
-          margin: [15, 15, 15, 15],
-          filename: `${safeName}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        })
-        .from(container)
-        .save();
-
-      document.body.removeChild(container);
-      toast.success(t('editor.exportPdfSuccess'));
+      try {
+        await html2pdf()
+          .set({
+            margin: [15, 15, 15, 15],
+            filename: `${safeName}.pdf`,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: { scale: 2, useCORS: true },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          })
+          .from(container)
+          .save();
+        toast.success(t('editor.exportPdfSuccess'));
+      } finally {
+        // Always clean up the container
+        if (container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
+      }
     } catch (err) {
       console.error('PDF export failed:', err);
       toast.error(t('editor.exportPdfError'));
