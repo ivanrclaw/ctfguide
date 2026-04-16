@@ -29,11 +29,13 @@ RUN pnpm prune --prod
 # ---- Stage 2: Production ----
 FROM node:22-bookworm
 
-# Install PostgreSQL
+# Install PostgreSQL + Chromium for PDF generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql \
     postgresql-client \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/cache/apt/*
+    chromium \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/cache/apt/* \
+    && echo "Chromium installed: $(which chromium)"
 
 WORKDIR /app
 

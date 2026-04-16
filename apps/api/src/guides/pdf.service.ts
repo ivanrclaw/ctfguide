@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer-core';
-import * as chromium from '@sparticuz/chromium';
 
 @Injectable()
 export class PdfService {
@@ -62,17 +61,18 @@ export class PdfService {
 </body>
 </html>`;
 
-    // @ts-ignore - @sparticuz/chromium types are incomplete
-    const chromiumModule: any = chromium;
+    // Use system Chromium installed in the Docker image
+    const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
 
     const browser = await puppeteer.launch({
       headless: true,
-      executablePath: await chromiumModule.executablePath(),
-      args: chromiumModule.args || [
+      executablePath,
+      args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
         '--disable-gpu',
+        '--headless',
       ],
     });
 
