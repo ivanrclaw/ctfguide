@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
-import { Request } from 'express';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, Res, UseGuards, Header } from '@nestjs/common';
+import { Request, Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import { GuidesService } from './guides.service';
+import { PdfService } from './pdf.service';
 import { InvitationsService } from '../invitations/invitations.service';
 import { CreateGuideDto, UpdateGuideDto } from './dto/create-guide.dto';
 
@@ -11,6 +12,7 @@ export class GuidesController {
   constructor(
     private readonly guidesService: GuidesService,
     private readonly invitationsService: InvitationsService,
+    private readonly pdfService: PdfService,
   ) {}
 
   @Post()
@@ -53,5 +55,21 @@ export class GuidesController {
     const user = req.user as { id: string };
     await this.guidesService.remove(id, user.id);
     return { deleted: true };
+  }
+
+  @Get(':id/export/pdf')
+  @Header('Content-Type', 'application/pdf')
+  async exportPdf(@Req() req: Request, @Res() res: Response, @Param('id') id: string) {
+    const user = req.user as { id: string };
+    let guide;
+    try {
+      guide = await this.guidesService.findOne(id, user.id);
+    } catch {
+      guide = await this.invitationsService.findOneAsCollaborator(id, user.id);
+    }
+    const pdfBuffer = await this.pdfService.generateGuidePdf(guide);
+    const safeName = guide.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+    res.end(pdfBuffer);
   }
 }
