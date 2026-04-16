@@ -34,7 +34,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql \
     postgresql-client \
     chromium \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/cache/apt/*
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/cache/apt/* \
+    && echo "Chromium installed: $(which chromium)"
 
 WORKDIR /app
 
