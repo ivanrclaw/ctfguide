@@ -102,7 +102,7 @@ export function ExportGuide({ guide }: ExportGuideProps) {
   const handleExportPdf = useCallback(async () => {
     setExportingPdf(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('ctfguide_token');
       const res = await fetch(`/api/guides/${guide.id}/export/pdf`, {
         headers: { Authorization: `Bearer ${token}` },
       });

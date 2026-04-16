@@ -55,7 +55,8 @@ RUN chmod +x /app/entrypoint.sh
 ARG JWT_SECRET=ctfguide_prod_change_this_in_fly_secrets
 
 # Environment defaults
-ENV NODE_ENV=production
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Data volume for PostgreSQL + uploads
 VOLUME ["/data"]

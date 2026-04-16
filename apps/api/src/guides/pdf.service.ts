@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import * as puppeteer from 'puppeteer';
+import * as puppeteer from 'puppeteer-core';
+import * as chromium from '@sparticuz/chromium';
 
 @Injectable()
 export class PdfService {
@@ -61,9 +62,18 @@ export class PdfService {
 </body>
 </html>`;
 
+    // @ts-ignore - @sparticuz/chromium types are incomplete
+    const chromiumModule: any = chromium;
+
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+      executablePath: await chromiumModule.executablePath(),
+      args: chromiumModule.args || [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+      ],
     });
 
     try {
