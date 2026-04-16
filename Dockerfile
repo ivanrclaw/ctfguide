@@ -56,13 +56,6 @@ ARG JWT_SECRET=ctfguide_prod_change_this_in_fly_secrets
 
 # Environment defaults
 ENV NODE_ENV=production
-ENV PORT=3001
-ENV DB_HOST=127.0.0.1
-ENV DB_PORT=5432
-ENV DB_USERNAME=ctfguide
-ENV DB_DATABASE=ctfguide
-ENV DATA_DIR=/data
-ENV JWT_SECRET=${JWT_SECRET}
 
 # Data volume for PostgreSQL + uploads
 VOLUME ["/data"]
