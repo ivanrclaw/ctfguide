@@ -61,14 +61,22 @@ export class GuidesController {
   @Header('Content-Type', 'application/pdf')
   async exportPdf(@Req() req: Request, @Res() res: Response, @Param('id') id: string) {
     const user = req.user as { id: string };
-    let guide;
+
+    // Try owner first, then collaborator
+    let guide: any;
     try {
       guide = await this.guidesService.findOne(id, user.id);
     } catch {
+      // Not the owner — check if accepted collaborator
       guide = await this.invitationsService.findOneAsCollaborator(id, user.id);
     }
+
+    if (!guide || !guide.id) {
+      return res.status(403).json({ message: 'You do not have access to this guide' });
+    }
+
     const pdfBuffer = await this.pdfService.generateGuidePdf(guide);
-    const safeName = guide.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeName = (guide.title || 'guide').replace(/[^a-zA-Z0-9_-]/g, '_');
     res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
     res.end(pdfBuffer);
   }
