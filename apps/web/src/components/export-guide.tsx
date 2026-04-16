@@ -132,6 +132,7 @@ export function ExportGuide({ guide }: ExportGuideProps) {
 
       // html2canvas 1.4.x does not support oklch/oklab/lab/lch/color() CSS functions.
       // Walk the tree and replace them with rgb equivalents before capturing.
+      // v2: ensure fresh deploy
       fixUnsupportedColors(container);
 
       await document.fonts.ready;

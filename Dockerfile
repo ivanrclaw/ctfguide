@@ -20,7 +20,8 @@ RUN pnpm install --frozen-lockfile
 # Build shared package first, then all apps
 # Set VITE_API_URL for production build (frontend uses /api as relative path)
 ENV VITE_API_URL=/api
-RUN pnpm run build
+ARG DEPLOY_TIMESTAMP=$(date +%s)
+RUN echo "DEPLOY_TIMESTAMP=$DEPLOY_TIMESTAMP" && pnpm run build
 
 # Prune dev dependencies to reduce image size
 RUN pnpm prune --prod
