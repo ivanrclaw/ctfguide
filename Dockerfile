@@ -35,7 +35,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     chromium \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/cache/apt/* \
-    && echo "Chromium installed: $(which chromium)"
+    && echo "Chromium installed: $(which chromium)" \
+    && groupadd -r postgres || true \
+    && useradd -r -g postgres postgres || true
 
 WORKDIR /app
 
