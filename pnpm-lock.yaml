@@ -74,6 +74,9 @@ importers:
       puppeteer:
         specifier: ^24.41.0
         version: 24.41.0(typescript@5.7.3)
+      puppeteer-core:
+        specifier: ^24.41.0
+        version: 24.41.0
       reflect-metadata:
         specifier: ^0.2.2
         version: 0.2.2
