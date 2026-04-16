@@ -62,6 +62,11 @@ ARG JWT_SECRET=ctfguide_prod_change_this_in_fly_secrets
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
+# Ensure postgres user exists (may already exist from postgresql package)
+RUN groupadd -r postgres || true && \
+    useradd -r -g postgres postgres || true && \
+    echo "postgres user uid=$(id -u postgres) gid=$(id -g postgres)"
+
 # Data volume for PostgreSQL + uploads
 VOLUME ["/data"]
 

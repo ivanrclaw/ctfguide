@@ -6,8 +6,9 @@ PGDATA="${DATA_DIR}/pgdata"
 UPLOAD_DIR="${DATA_DIR}/uploads"
 PG_BIN="/usr/lib/postgresql/15/bin"
 
-# Ensure data dir permissions — postgres user needs write access
-chown postgres:postgres "$DATA_DIR"
+# Ensure data dir exists and has correct permissions
+mkdir -p "$DATA_DIR"
+chown postgres:postgres "$DATA_DIR" 2>/dev/null || true
 
 # Create upload directory for future file uploads
 mkdir -p "$UPLOAD_DIR"
@@ -21,7 +22,7 @@ if [ ! -f "$PGDATA/PG_VERSION" ]; then
   chown postgres:postgres "$PGDATA"
 
   # Initialize as postgres user
-  su - postgres -c "$PG_BIN/initdb -D $PGDATA --auth-host=trust --auth-local=trust --encoding=UTF8"
+  su postgres -c "$PG_BIN/initdb -D $PGDATA --auth-host=trust --auth-local=trust --encoding=UTF8"
 
   # Configure PostgreSQL
   cat >> "$PGDATA/postgresql.conf" <<EOF
@@ -42,11 +43,17 @@ EOF
 fi
 
 # Ensure postgres owns the data dir
-chown -R postgres:postgres "$PGDATA"
+chown -R postgres:postgres "$PGDATA" 2>/dev/null || true
 
 # Start PostgreSQL as postgres user
 echo "Starting PostgreSQL..."
-su - postgres -c "$PG_BIN/pg_ctl -D $PGDATA -l $DATA_DIR/pg.log -w start"
+su postgres -c "$PG_BIN/pg_ctl -D $PGDATA -l $DATA_DIR/pg.log -w start" || {
+  echo "pg_ctl failed. Checking logs:"
+  cat "$DATA_DIR/pg.log" 2>/dev/null || true
+  # Try starting directly
+  su postgres -c "$PG_BIN/postgres -D $PGDATA" &
+  sleep 3
+}
 
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL..."
