@@ -254,7 +254,7 @@ export function ProjectorView() {
           {/* Session code (small, for reference) */}
           <div className="mb-8 flex items-center gap-3">
             <span className="text-sm text-gray-500">{t('projector.sessionCode')}:</span>
-            <Badge variant="outline" className="text-xl px-4 py-1 font-mono tracking-widest">
+            <Badge variant="outline" className="text-xl px-4 py-1 font-mono tracking-widest text-white border-gray-600">
               {info.code}
             </Badge>
           </div>
