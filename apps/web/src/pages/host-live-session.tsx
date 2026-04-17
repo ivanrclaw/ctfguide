@@ -305,7 +305,7 @@ export function HostLiveSession() {
       )}
       {stats.status === 'running' && (
         <div className="mb-6 flex gap-3">
-          <Button onClick={finishSession} variant="destructive" className="gap-2" size="lg">
+          <Button onClick={finishSession} className="gap-2 bg-red-600 hover:bg-red-700 text-white" size="lg">
             <Square className="h-4 w-4" />
             {t('liveSession.endSession')}
           </Button>

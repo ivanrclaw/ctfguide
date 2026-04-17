@@ -134,7 +134,7 @@ export function StudentLiveSession() {
     }
   }, [code, navigate, location.state, t]);
 
-  // Setup WebSocket
+  // Setup WebSocket + polling fallback
   useEffect(() => {
     if (!code || !name) return;
 
@@ -145,7 +145,7 @@ export function StudentLiveSession() {
       reconnection: true,
     });
 
-    socket.on('connect', () => {
+    const tryJoinSession = () => {
       if (participantRef.current) {
         socket.emit('student:join', {
           sessionId: participantRef.current.sessionId,
@@ -153,7 +153,9 @@ export function StudentLiveSession() {
           participantId: participantRef.current.id,
         });
       }
-    });
+    };
+
+    socket.on('connect', tryJoinSession);
 
     socket.on('session:started', () => {
       setSessionStatus('running');
@@ -167,8 +169,39 @@ export function StudentLiveSession() {
 
     socketRef.current = socket;
 
+    // Poll to join room once participant ref is available
+    const checkJoinInterval = setInterval(() => {
+      if (participantRef.current) {
+        tryJoinSession();
+        clearInterval(checkJoinInterval);
+      }
+    }, 500);
+
+    // Polling fallback: check session status every 3s
+    const pollStatusInterval = setInterval(async () => {
+      if (!code) return;
+      try {
+        const res = await fetch(`${PUBLIC_API}/public/live-sessions/${code}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status !== sessionStatus) {
+            setSessionStatus(data.status);
+            if (data.status === 'running') {
+              toast.success(t('liveSession.sessionStartedToast'));
+            } else if (data.status === 'finished') {
+              toast.info(t('liveSession.sessionFinishedToast'));
+            }
+          }
+        }
+      } catch {
+        // Silently fail
+      }
+    }, 3000);
+
     return () => {
       socket.disconnect();
+      clearInterval(checkJoinInterval);
+      clearInterval(pollStatusInterval);
     };
   }, [code, name, decodedName, t]);
 
