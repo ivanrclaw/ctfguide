@@ -297,5 +297,23 @@
     "active": "Active",
     "progress": "Progress",
     "waitingToStart": "Wait for the host to start the session"
+  },
+  "projector": {
+    "loading": "Loading session...",
+    "joinTitle": "Join the Session!",
+    "goTo": "Go to:",
+    "enterCode": "And enter the code:",
+    "studentsJoined": "student(s) joined",
+    "online": "online",
+    "participants": "Participants",
+    "students": "Students",
+    "phases": "Phases",
+    "avgProgress": "Avg Progress",
+    "sessionCode": "Session code",
+    "leaderboard": "Leaderboard",
+    "sessionComplete": "Session Complete!",
+    "waitingStatus": "Waiting for students",
+    "runningStatus": "In Progress",
+    "finishedStatus": "Finished"
   }
 }

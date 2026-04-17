@@ -297,5 +297,23 @@
     "active": "Activa",
     "progress": "Progreso",
     "waitingToStart": "Espera a que el profesor inicie la sesión"
+  },
+  "projector": {
+    "loading": "Cargando sesión...",
+    "joinTitle": "¡Únete a la Sesión!",
+    "goTo": "Ve a:",
+    "enterCode": "E introduce el código:",
+    "studentsJoined": "alumno(s) conectado(s)",
+    "online": "en línea",
+    "participants": "Participantes",
+    "students": "Alumnos",
+    "phases": "Fases",
+    "avgProgress": "Progreso Medio",
+    "sessionCode": "Código de sesión",
+    "leaderboard": "Tabla de Clasificación",
+    "sessionComplete": "¡Sesión Completada!",
+    "waitingStatus": "Esperando alumnos",
+    "runningStatus": "En curso",
+    "finishedStatus": "Finalizada"
   }
 }

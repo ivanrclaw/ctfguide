@@ -25,8 +25,8 @@ function App() {
           <Route path="/view/:slug" element={<PublicView />} />
           <Route path="/live/join" element={<JoinLiveSession />} />
           <Route path="/live/:code/:name" element={<StudentLiveSession />} />
-          <Route path="/live/projector/:code" element={<ProjectorView />} />
         </Route>
+        <Route path="/live/projector/:code" element={<ProjectorView />} />
         <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/editor/:guideId" element={<Editor />} />

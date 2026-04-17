@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { io, Socket } from 'socket.io-client';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -38,6 +39,7 @@ interface ProjectorInfo {
 
 export function ProjectorView() {
   const { code } = useParams<{ code: string }>();
+  const { t } = useTranslation();
   const [info, setInfo] = useState<ProjectorInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const socketRef = useRef<Socket | null>(null);
@@ -115,7 +117,7 @@ export function ProjectorView() {
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
         <div className="text-center">
           <div className="mb-6 h-16 w-16 animate-spin rounded-full border-4 border-blue-500 border-t-transparent mx-auto" />
-          <p className="text-2xl text-gray-400">Loading session...</p>
+          <p className="text-2xl text-gray-400">{t('projector.loading')}</p>
         </div>
       </div>
     );
@@ -128,10 +130,10 @@ export function ProjectorView() {
     finished: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
   };
 
-  const statusLabels = {
-    waiting: 'Waiting for students',
-    running: 'In Progress',
-    finished: 'Finished',
+  const statusLabels: Record<string, string> = {
+    waiting: t('projector.waitingStatus'),
+    running: t('projector.runningStatus'),
+    finished: t('projector.finishedStatus'),
   };
 
   const difficultyEmojis: Record<string, string> = {
@@ -169,12 +171,12 @@ export function ProjectorView() {
           {/* Join URL and code */}
           <div className="text-center mb-16">
             <Monitor className="mx-auto mb-8 h-24 w-24 text-blue-400" />
-            <h2 className="text-4xl font-bold mb-4">Join the Session!</h2>
-            <p className="text-2xl text-gray-400 mb-8">Go to:</p>
+            <h2 className="text-4xl font-bold mb-4">{t('projector.joinTitle')}</h2>
+            <p className="text-2xl text-gray-400 mb-8">{t('projector.goTo')}</p>
             <div className="rounded-2xl bg-gray-800 px-12 py-6 mb-8">
               <p className="text-5xl font-bold text-blue-400 tracking-wide">{joinUrl}</p>
             </div>
-            <p className="text-xl text-gray-400 mb-4">And enter the code:</p>
+            <p className="text-xl text-gray-400 mb-4">{t('projector.enterCode')}</p>
             <div className="rounded-2xl bg-blue-600 px-16 py-8 inline-block">
               <p className="text-8xl font-bold tracking-widest font-mono">{info.code}</p>
             </div>
@@ -183,14 +185,14 @@ export function ProjectorView() {
           {/* Live participant count */}
           <div className="flex items-center gap-4 text-2xl text-gray-400">
             <Users className="h-8 w-8" />
-            <span>{info.totalParticipants} student{info.totalParticipants !== 1 ? 's' : ''} joined</span>
-            <span className="text-green-400">({info.onlineParticipants} online)</span>
+            <span>{info.totalParticipants} {t('projector.studentsJoined')}</span>
+            <span className="text-green-400">({info.onlineParticipants} {t('projector.online')})</span>
           </div>
 
           {/* Participants list */}
           {info.participants.length > 0 && (
             <div className="mt-12 w-full max-w-4xl">
-              <h3 className="text-xl text-gray-400 mb-4 text-center">Participants</h3>
+              <h3 className="text-xl text-gray-400 mb-4 text-center">{t('projector.participants')}</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {info.participants.map((p) => (
                   <div
@@ -227,12 +229,12 @@ export function ProjectorView() {
             <div className="rounded-2xl bg-gray-800 p-6 text-center">
               <Users className="mx-auto mb-2 h-8 w-8 text-blue-400" />
               <p className="text-4xl font-bold">{info.totalParticipants}</p>
-              <p className="text-sm text-gray-400">Students</p>
+              <p className="text-sm text-gray-400">{t('projector.students')}</p>
             </div>
             <div className="rounded-2xl bg-gray-800 p-6 text-center">
               <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-green-400" />
               <p className="text-4xl font-bold">{info.totalPhases}</p>
-              <p className="text-sm text-gray-400">Phases</p>
+              <p className="text-sm text-gray-400">{t('projector.phases')}</p>
             </div>
             <div className="rounded-2xl bg-gray-800 p-6 text-center">
               <Trophy className="mx-auto mb-2 h-8 w-8 text-yellow-400" />
@@ -245,13 +247,13 @@ export function ProjectorView() {
                   : 0}
                 %
               </p>
-              <p className="text-sm text-gray-400">Avg Progress</p>
+              <p className="text-sm text-gray-400">{t('projector.avgProgress')}</p>
             </div>
           </div>
 
           {/* Session code (small, for reference) */}
           <div className="mb-8 flex items-center gap-3">
-            <span className="text-sm text-gray-500">Session code:</span>
+            <span className="text-sm text-gray-500">{t('projector.sessionCode')}:</span>
             <Badge variant="outline" className="text-xl px-4 py-1 font-mono tracking-widest">
               {info.code}
             </Badge>
@@ -261,7 +263,7 @@ export function ProjectorView() {
           <div className="w-full max-w-4xl">
             <h2 className="text-2xl font-bold mb-6 text-center flex items-center justify-center gap-2">
               <Trophy className="h-6 w-6 text-yellow-400" />
-              Leaderboard
+              {t('projector.leaderboard')}
             </h2>
             <div className="space-y-3">
               {info.participants
@@ -315,7 +317,7 @@ export function ProjectorView() {
       {info.status === 'finished' && (
         <div className="flex flex-col items-center px-8 py-16">
           <Trophy className="mb-8 h-32 w-32 text-yellow-400" />
-          <h1 className="text-6xl font-bold mb-4">Session Complete!</h1>
+          <h1 className="text-6xl font-bold mb-4">{t('projector.sessionComplete')}</h1>
           <p className="text-2xl text-gray-400 mb-12">{info.title}</p>
 
           {/* Final leaderboard */}
