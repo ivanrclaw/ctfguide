@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LiveSession } from './live-session.entity';
 import { LiveSessionParticipant } from './live-session-participant.entity';
 import { LiveSessionsService } from './live-sessions.service';
@@ -16,6 +18,17 @@ import { InvitationsModule } from '../invitations/invitations.module';
     TypeOrmModule.forFeature([LiveSession, LiveSessionParticipant, Guide, Phase]),
     PhasesModule,
     InvitationsModule,
+    ConfigModule,
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>(
+          'JWT_SECRET',
+          'ctfguide_dev_secret_change_in_prod',
+        ),
+        signOptions: { expiresIn: '7d' },
+      }),
+    }),
   ],
   controllers: [LiveSessionsController, PublicLiveSessionsController],
   providers: [LiveSessionsService, LiveSessionGateway],
