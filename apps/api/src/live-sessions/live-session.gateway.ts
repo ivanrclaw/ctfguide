@@ -11,7 +11,6 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { LiveSessionsService } from './live-sessions.service';
-import { LiveSessionsController } from './live-sessions.controller';
 
 interface LiveSessionHost {
   userId: string;
@@ -96,7 +95,7 @@ export class LiveSessionGateway
     // Check if it was a host
     const host = this.connectedHosts.get(client.id);
     if (host?.sessionId) {
-      client.to(`session:${host.sessionId}`).emit('host:disconnected');
+      this.server.to(`session:${host.sessionId}`).emit('host:disconnected');
     }
     this.connectedHosts.delete(client.id);
 
@@ -106,9 +105,11 @@ export class LiveSessionGateway
       // Mark participant as offline
       await this.liveSessionsService.disconnectParticipant(client.id);
       if (student.sessionId) {
-        client.to(`session:${student.sessionId}`).emit('student:disconnected', {
+        this.server.to(`session:${student.sessionId}`).emit('student:disconnected', {
           name: student.name,
         });
+        // Broadcast updated stats after disconnect
+        this.broadcastStats(student.sessionId);
       }
     }
     this.connectedStudents.delete(client.id);
@@ -116,7 +117,7 @@ export class LiveSessionGateway
 
   // Host joins a session room
   @SubscribeMessage('host:join')
-  handleHostJoin(
+  async handleHostJoin(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { sessionId: string },
   ) {
@@ -128,7 +129,7 @@ export class LiveSessionGateway
     client.join(`session:${data.sessionId}`);
 
     // Send initial stats
-    this.sendStatsToHost(data.sessionId, client.id);
+    await this.sendStatsToHost(data.sessionId, client.id);
 
     return { success: true };
   }
@@ -152,32 +153,32 @@ export class LiveSessionGateway
     await this.liveSessionsService.updateParticipantSocket(data.participantId, client.id);
 
     // Notify host of new student
-    client.to(`session:${data.sessionId}`).emit('session:participantJoined', {
+    this.server.to(`session:${data.sessionId}`).emit('session:participantJoined', {
       name: data.name,
       participantId: data.participantId,
     });
 
-    // Send updated stats to host
-    this.broadcastStats(data.sessionId);
+    // Send updated stats to all hosts in this session
+    await this.broadcastStats(data.sessionId);
 
     return { success: true };
   }
 
   // Student submits answer
   @SubscribeMessage('student:answer')
-  handleStudentAnswer(
+  async handleStudentAnswer(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { sessionId: string; name: string; phaseId: string; valid: boolean; unlockedPhaseIndex: number },
   ) {
     if (data.valid) {
-      client.to(`session:${data.sessionId}`).emit('session:participantProgress', {
+      this.server.to(`session:${data.sessionId}`).emit('session:participantProgress', {
         name: data.name,
         phaseId: data.phaseId,
         unlockedPhaseIndex: data.unlockedPhaseIndex,
       });
 
-      // Send updated stats to host
-      this.broadcastStats(data.sessionId);
+      // Send updated stats to all hosts in this session
+      await this.broadcastStats(data.sessionId);
     }
 
     return { success: true };
@@ -185,12 +186,12 @@ export class LiveSessionGateway
 
   // Session started
   @SubscribeMessage('session:started')
-  handleSessionStarted(
+  async handleSessionStarted(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { sessionId: string },
   ) {
     this.server.to(`session:${data.sessionId}`).emit('session:started');
-    this.broadcastStats(data.sessionId);
+    await this.broadcastStats(data.sessionId);
     return { success: true };
   }
 
@@ -201,6 +202,21 @@ export class LiveSessionGateway
     @MessageBody() data: { sessionId: string },
   ) {
     this.server.to(`session:${data.sessionId}`).emit('session:finished');
+    return { success: true };
+  }
+
+  // Projector view joins to get session info
+  @SubscribeMessage('projector:join')
+  async handleProjectorJoin(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { sessionId: string },
+  ) {
+    client.join(`session:${data.sessionId}`);
+
+    // Send session info to projector
+    const stats = await this.liveSessionsService.getSessionStatsForProjector(data.sessionId);
+    this.server.to(client.id).emit('projector:info', stats);
+
     return { success: true };
   }
 
@@ -217,11 +233,10 @@ export class LiveSessionGateway
   }
 
   private async broadcastStats(sessionId: string) {
-    // Find the host socket for this session
-    for (const [, host] of this.connectedHosts.entries()) {
+    // Send stats to ALL hosts tracking this session
+    for (const [socketId, host] of this.connectedHosts.entries()) {
       if (host.sessionId === sessionId) {
-        await this.sendStatsToHost(sessionId, host.socketId);
-        break;
+        await this.sendStatsToHost(sessionId, socketId);
       }
     }
   }

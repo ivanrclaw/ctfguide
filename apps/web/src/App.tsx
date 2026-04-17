@@ -11,6 +11,7 @@ import { PublicView } from '@/pages/public-view';
 import { JoinLiveSession } from '@/pages/join-live-session';
 import { HostLiveSession } from '@/pages/host-live-session';
 import { StudentLiveSession } from '@/pages/student-live-session';
+import { ProjectorView } from '@/pages/projector-view';
 import { WebSocketProvider } from '@/contexts/websocket-context';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
           <Route path="/view/:slug" element={<PublicView />} />
           <Route path="/live/join" element={<JoinLiveSession />} />
           <Route path="/live/:code/:name" element={<StudentLiveSession />} />
+          <Route path="/live/projector/:code" element={<ProjectorView />} />
         </Route>
         <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<Dashboard />} />

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { io, Socket } from 'socket.io-client';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,8 @@ import {
   BarChart3,
   Wifi,
   WifiOff,
+  Monitor,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -44,10 +47,13 @@ interface SessionStats {
 export function HostLiveSession() {
   const navigate = useNavigate();
   const { sessionId } = useParams<{ sessionId: string }>();
+  const { t } = useTranslation('common');
   const [stats, setStats] = useState<SessionStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionCode, setSessionCode] = useState('');
+  const [copied, setCopied] = useState(false);
   const socketRef = useRef<Socket | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchSessionInfo = useCallback(async () => {
     if (!sessionId) return;
@@ -60,12 +66,12 @@ export function HostLiveSession() {
       const data = await res.json();
       setSessionCode(data.code);
     } catch {
-      toast.error('Failed to load session');
+      toast.error(t('liveSession.failedLoad'));
       navigate('/dashboard');
     } finally {
       setLoading(false);
     }
-  }, [sessionId, navigate]);
+  }, [sessionId, navigate, t]);
 
   const fetchStats = useCallback(async () => {
     if (!sessionId) return;
@@ -78,11 +84,11 @@ export function HostLiveSession() {
       const data = await res.json();
       setStats(data);
     } catch {
-      // Silently fail - WS will handle updates
+      // Silently fail - WS or next poll will handle
     }
   }, [sessionId]);
 
-  // Setup WebSocket connection
+  // Setup WebSocket + polling connection
   useEffect(() => {
     fetchSessionInfo();
     fetchStats();
@@ -90,6 +96,7 @@ export function HostLiveSession() {
     const token = localStorage.getItem('ctfguide_token');
     if (!token || !sessionId) return;
 
+    // WebSocket for real-time events
     const socket = io(`${WS_URL}/live-sessions`, {
       path: '/api/socket.io',
       transports: ['websocket', 'polling'],
@@ -108,7 +115,6 @@ export function HostLiveSession() {
     });
 
     socket.on('session:participantJoined', () => {
-      // Stats will be updated by the server
       fetchStats();
     });
 
@@ -118,8 +124,14 @@ export function HostLiveSession() {
 
     socketRef.current = socket;
 
+    // Polling fallback: refresh stats every 3 seconds
+    pollRef.current = setInterval(() => {
+      fetchStats();
+    }, 3000);
+
     return () => {
       socket.disconnect();
+      if (pollRef.current) clearInterval(pollRef.current);
     };
   }, [sessionId, fetchSessionInfo, fetchStats]);
 
@@ -137,9 +149,9 @@ export function HostLiveSession() {
         socketRef.current.emit('session:started', { sessionId });
       }
 
-      toast.success('Session started! Students can now begin.');
+      toast.success(t('liveSession.sessionStarted'));
     } catch {
-      toast.error('Failed to start session');
+      toast.error(t('liveSession.failedStart'));
     }
   };
 
@@ -157,10 +169,17 @@ export function HostLiveSession() {
         socketRef.current.emit('session:finished', { sessionId });
       }
 
-      toast.success('Session finished');
+      toast.success(t('liveSession.sessionFinished'));
     } catch {
-      toast.error('Failed to finish session');
+      toast.error(t('liveSession.failedFinish'));
     }
+  };
+
+  const copyCode = () => {
+    navigator.clipboard.writeText(sessionCode);
+    setCopied(true);
+    toast.success(t('liveSession.codeCopied'));
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (loading || !stats) {
@@ -168,7 +187,7 @@ export function HostLiveSession() {
       <div className="flex h-64 items-center justify-center">
         <div className="text-center">
           <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto" />
-          <p className="text-muted-foreground">Loading session...</p>
+          <p className="text-muted-foreground">{t('liveSession.loading')}</p>
         </div>
       </div>
     );
@@ -181,10 +200,12 @@ export function HostLiveSession() {
   };
 
   const statusLabels = {
-    waiting: 'Waiting for students',
-    running: 'In Progress',
-    finished: 'Finished',
+    waiting: t('liveSession.waitingStudents'),
+    running: t('liveSession.inProgress'),
+    finished: t('liveSession.finished'),
   };
+
+  const projectorUrl = `${window.location.origin}/live/projector/${sessionCode}`;
 
   return (
     <div>
@@ -197,20 +218,34 @@ export function HostLiveSession() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Radio className="h-6 w-6 text-primary animate-pulse" />
-              Live Session
+              {t('liveSession.title')}
             </h1>
-            <p className="text-muted-foreground">Real-time progress dashboard</p>
+            <p className="text-muted-foreground">{t('liveSession.subtitle')}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="outline" className="text-lg px-4 py-1.5 tracking-widest font-mono">
+          <Badge
+            variant="outline"
+            className="text-lg px-4 py-1.5 tracking-widest font-mono cursor-pointer hover:bg-primary/5"
+            onClick={copyCode}
+          >
             {sessionCode}
+            <Copy className="ml-2 h-3.5 w-3.5" />
           </Badge>
           <Badge variant="outline" className={statusColors[stats.status]}>
             {stats.status === 'waiting' && <Timer className="mr-1 h-3 w-3" />}
             {stats.status === 'running' && <Play className="mr-1 h-3 w-3" />}
             {statusLabels[stats.status]}
           </Badge>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => window.open(projectorUrl, '_blank')}
+          >
+            <Monitor className="h-4 w-4" />
+            {t('liveSession.projectorView')}
+          </Button>
         </div>
       </div>
 
@@ -220,13 +255,13 @@ export function HostLiveSession() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Users className="h-4 w-4" />
-              Total Students
+              {t('liveSession.totalStudents')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold">{stats.totalParticipants}</p>
             <p className="text-xs text-muted-foreground">
-              {stats.onlineParticipants} online
+              {stats.onlineParticipants} {t('liveSession.online')}
             </p>
           </CardContent>
         </Card>
@@ -234,7 +269,7 @@ export function HostLiveSession() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
-              Total Phases
+              {t('liveSession.totalPhases')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -245,7 +280,7 @@ export function HostLiveSession() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <CheckCircle2 className="h-4 w-4" />
-              Avg Progress
+              {t('liveSession.avgProgress')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -267,7 +302,7 @@ export function HostLiveSession() {
         <div className="mb-6 flex gap-3">
           <Button onClick={startSession} className="gap-2" size="lg">
             <Play className="h-4 w-4" />
-            Start Session — Students can begin solving
+            {t('liveSession.startSession')}
           </Button>
         </div>
       )}
@@ -275,7 +310,7 @@ export function HostLiveSession() {
         <div className="mb-6 flex gap-3">
           <Button onClick={finishSession} variant="destructive" className="gap-2" size="lg">
             <Square className="h-4 w-4" />
-            End Session
+            {t('liveSession.endSession')}
           </Button>
         </div>
       )}
@@ -285,15 +320,15 @@ export function HostLiveSession() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            Participants Progress
+            {t('liveSession.participantsProgress')}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {stats.participants.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
               <Users className="mx-auto mb-4 h-12 w-12 opacity-50" />
-              <p>No students have joined yet.</p>
-              <p className="text-sm">Share the session code: {sessionCode}</p>
+              <p>{t('liveSession.noStudentsYet')}</p>
+              <p className="text-sm">{t('liveSession.shareCode')} {sessionCode}</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -321,7 +356,7 @@ export function HostLiveSession() {
                   </div>
                   <div className="text-right text-sm">
                     <span className="font-medium">{p.unlockedCount}/{stats.totalPhases}</span>
-                    <span className="ml-1 text-muted-foreground">phases</span>
+                    <span className="ml-1 text-muted-foreground">{t('liveSession.phases')}</span>
                   </div>
                 </div>
               ))}

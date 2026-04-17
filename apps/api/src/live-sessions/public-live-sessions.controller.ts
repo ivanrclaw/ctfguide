@@ -109,4 +109,10 @@ export class PublicLiveSessionsController {
       }));
     return safePhases;
   }
+
+  @Get(':code/projector-info')
+  async getProjectorInfo(@Param('code') code: string) {
+    const session = await this.liveSessionsService.getSessionByCode(code);
+    return this.liveSessionsService.getProjectorInfoByCode(code);
+  }
 }

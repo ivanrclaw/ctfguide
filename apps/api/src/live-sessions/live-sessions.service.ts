@@ -304,4 +304,70 @@ export class LiveSessionsService {
       { socketId, isOnline: true, disconnectedAt: null },
     );
   }
+
+  // Get session stats for projector view (no auth needed)
+  async getSessionStatsForProjector(sessionId: string): Promise<any> {
+    const session = await this.sessionsRepository.findOne({
+      where: { id: sessionId },
+      relations: ['guide', 'guide.phases'],
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    const participants = await this.participantsRepository.find({
+      where: { sessionId },
+      order: { unlockedPhaseIndex: 'DESC', name: 'ASC' },
+    });
+
+    const totalPhases = session.guide.phases.filter((p) => p.unlockType !== 'none').length;
+
+    return {
+      sessionId: session.id,
+      code: session.code,
+      status: session.status,
+      title: session.guide.title,
+      ctfName: session.guide.ctfName,
+      category: session.guide.category,
+      difficulty: session.guide.difficulty,
+      totalPhases,
+      totalParticipants: participants.length,
+      onlineParticipants: participants.filter((p) => p.isOnline).length,
+      participants: participants.map((p) => ({
+        id: p.id,
+        name: p.name,
+        isOnline: p.isOnline,
+        unlockedCount: (p.unlockedPhaseIds || []).length,
+        progress: totalPhases > 0 ? Math.round(((p.unlockedPhaseIds || []).length / totalPhases) * 100) : 100,
+      })),
+    };
+  }
+
+  // Get projector info by code (public, no auth)
+  async getProjectorInfoByCode(code: string): Promise<any> {
+    const session = await this.getSessionByCode(code);
+    const participants = await this.participantsRepository.find({
+      where: { sessionId: session.id },
+      order: { unlockedPhaseIndex: 'DESC', name: 'ASC' },
+    });
+
+    const totalPhases = (session.guide.phases || []).filter((p) => p.unlockType !== 'none').length;
+
+    return {
+      sessionId: session.id,
+      code: session.code,
+      status: session.status,
+      title: session.guide.title,
+      ctfName: session.guide.ctfName,
+      category: session.guide.category,
+      difficulty: session.guide.difficulty,
+      totalPhases,
+      totalParticipants: participants.length,
+      onlineParticipants: participants.filter((p) => p.isOnline).length,
+      participants: participants.map((p) => ({
+        name: p.name,
+        isOnline: p.isOnline,
+        unlockedCount: (p.unlockedPhaseIds || []).length,
+        progress: totalPhases > 0 ? Math.round(((p.unlockedPhaseIds || []).length / totalPhases) * 100) : 100,
+      })),
+    };
+  }
 }

@@ -25,6 +25,7 @@ import {
   Users,
   ArrowLeft,
   CheckCircle2,
+  Timer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -50,6 +51,14 @@ interface GuideInfo {
   difficulty: string;
 }
 
+const difficultyConfig: Record<string, { icon: typeof Shield; label: string; color: string }> = {
+  beginner: { icon: Shield, label: 'Beginner', color: 'bg-green-500/10 text-green-600 border-green-500/20' },
+  easy: { icon: Zap, label: 'Easy', color: 'bg-lime-500/10 text-lime-600 border-lime-500/20' },
+  medium: { icon: Flame, label: 'Medium', color: 'bg-orange-500/10 text-orange-600 border-orange-500/20' },
+  hard: { icon: Bug, label: 'Hard', color: 'bg-red-500/10 text-red-600 border-red-500/20' },
+  insane: { icon: Skull, label: 'Insane', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
+};
+
 export function StudentLiveSession() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,23 +76,13 @@ export function StudentLiveSession() {
 
   const socketRef = useRef<Socket | null>(null);
   const participantRef = useRef<any>(location.state?.participant || null);
-
   const decodedName = decodeURIComponent(name || '');
 
-  const difficultyConfig: Record<string, { icon: typeof Shield; labelKey: string; color: string }> = {
-    beginner: { icon: Shield, labelKey: 'publicView.difficultyBeginner', color: 'bg-green-500/10 text-green-600 border-green-500/20' },
-    easy: { icon: Zap, labelKey: 'publicView.difficultyEasy', color: 'bg-lime-500/10 text-lime-600 border-lime-500/20' },
-    medium: { icon: Flame, labelKey: 'publicView.difficultyMedium', color: 'bg-orange-500/10 text-orange-600 border-orange-500/20' },
-    hard: { icon: Bug, labelKey: 'publicView.difficultyHard', color: 'bg-red-500/10 text-red-600 border-red-500/20' },
-    insane: { icon: Skull, labelKey: 'publicView.difficultyInsane', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
-  };
-
-  // Fetch guide phases
+  // Fetch session info and phases
   useEffect(() => {
     if (!code) return;
 
-    // Load phases via session context
-    const loadSessionPhases = async () => {
+    const loadSession = async () => {
       try {
         const sessionRes = await fetch(`${PUBLIC_API}/public/live-sessions/${code}`);
         if (!sessionRes.ok) {
@@ -94,38 +93,46 @@ export function StudentLiveSession() {
         setGuide(sessionData.guide);
         setSessionStatus(sessionData.status);
 
-        // Fetch phases via the dedicated endpoint
+        // Fetch phases via dedicated endpoint
         const phasesRes = await fetch(`${PUBLIC_API}/public/live-sessions/${code}/phases`);
         if (phasesRes.ok) {
           const phasesData = await phasesRes.json();
           setPhases(phasesData);
+
+          // If reconnecting, restore unlocked phases
+          if (location.state?.isReconnect && location.state?.participant?.unlockedPhaseIds) {
+            setUnlockedPhases(new Set(location.state.participant.unlockedPhaseIds));
+            setExpandedPhases(new Set(location.state.participant.unlockedPhaseIds));
+          }
         }
       } catch {
-        toast.error('Failed to load session');
+        toast.error(t('liveSession.failedLoad'));
         navigate('/live/join');
       } finally {
         setIsLoading(false);
       }
     };
 
-    // If we have session info from state, use it
     if (location.state?.session?.guide) {
       setGuide(location.state.session.guide);
       setSessionStatus(location.state.session.status);
-      // Fetch phases via dedicated endpoint
       fetch(`${PUBLIC_API}/public/live-sessions/${code}/phases`)
         .then((res) => res.ok ? res.json() : Promise.reject())
         .then((data) => {
           setPhases(data);
+          if (location.state?.isReconnect && location.state?.participant?.unlockedPhaseIds) {
+            setUnlockedPhases(new Set(location.state.participant.unlockedPhaseIds));
+            setExpandedPhases(new Set(location.state.participant.unlockedPhaseIds));
+          }
         })
         .catch(() => {
-          toast.error('Failed to load guide phases');
+          toast.error(t('liveSession.failedLoadPhases'));
         })
         .finally(() => setIsLoading(false));
     } else {
-      loadSessionPhases();
+      loadSession();
     }
-  }, [code, navigate, location.state]);
+  }, [code, navigate, location.state, t]);
 
   // Setup WebSocket
   useEffect(() => {
@@ -150,18 +157,12 @@ export function StudentLiveSession() {
 
     socket.on('session:started', () => {
       setSessionStatus('running');
-      toast.success('Session started! You can now begin solving.');
+      toast.success(t('liveSession.sessionStartedToast'));
     });
 
     socket.on('session:finished', () => {
       setSessionStatus('finished');
-      toast.info('Session has ended.');
-    });
-
-    socket.on('session:participantProgress', (data: any) => {
-      if (data.name === decodedName) {
-        // Update own progress if needed
-      }
+      toast.info(t('liveSession.sessionFinishedToast'));
     });
 
     socketRef.current = socket;
@@ -169,7 +170,7 @@ export function StudentLiveSession() {
     return () => {
       socket.disconnect();
     };
-  }, [code, name, decodedName]);
+  }, [code, name, decodedName, t]);
 
   const addUnlocked = useCallback((phaseId: string) => {
     setUnlockedPhases((prev) => new Set([...prev, phaseId]));
@@ -183,7 +184,7 @@ export function StudentLiveSession() {
     }
 
     if (sessionStatus !== 'running' && phase.unlockType !== 'none') {
-      toast.error('Session is not running yet');
+      toast.error(t('liveSession.waitingToStart'));
       return;
     }
 
@@ -215,7 +216,6 @@ export function StudentLiveSession() {
           return next;
         });
 
-        // Emit to WebSocket
         if (socketRef.current && participantRef.current) {
           socketRef.current.emit('student:answer', {
             sessionId: participantRef.current.sessionId,
@@ -258,12 +258,59 @@ export function StudentLiveSession() {
     return phase.unlockType !== 'none' && !unlockedPhases.has(phase.id);
   };
 
+  // WAITING SCREEN - shown when session hasn't started yet
+  if (!isLoading && sessionStatus === 'waiting' && guide) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-primary/5 to-background p-4">
+        <div className="text-center max-w-md">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+            <Timer className="h-10 w-10 text-primary animate-pulse" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">{t('liveSession.waitingForHost')}</h1>
+          <p className="text-lg mb-4">{guide.title}</p>
+          <p className="text-muted-foreground mb-2">{guide.description}</p>
+          <div className="flex items-center justify-center gap-2 mb-6">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">{decodedName}</span>
+          </div>
+          <div className="rounded-lg border bg-muted/30 p-4">
+            <p className="text-sm text-muted-foreground">
+              {t('liveSession.waitingInstructions')}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // FINISHED SCREEN
+  if (!isLoading && sessionStatus === 'finished' && guide) {
+    const totalLocked = phases.filter((p) => p.unlockType !== 'none').length;
+    const unlockedCount = phases.filter((p) => p.unlockType !== 'none' && unlockedPhases.has(p.id)).length;
+
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gradient-to-b from-primary/5 to-background p-4">
+        <div className="text-center max-w-md">
+          <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-green-500/10">
+            <Trophy className="h-10 w-10 text-green-500" />
+          </div>
+          <h1 className="text-2xl font-bold mb-2">{t('liveSession.sessionEnded')}</h1>
+          <p className="text-lg mb-4">{guide.title}</p>
+          <div className="rounded-lg border bg-muted/30 p-4 mb-4">
+            <p className="text-3xl font-bold text-primary">{unlockedCount}/{totalLocked}</p>
+            <p className="text-sm text-muted-foreground">{t('liveSession.phasesCompleted')}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto" />
-          <p className="text-muted-foreground">Loading session...</p>
+          <p className="text-muted-foreground">{t('liveSession.loading')}</p>
         </div>
       </div>
     );
@@ -274,10 +321,10 @@ export function StudentLiveSession() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <Trophy className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
-          <h1 className="mb-2 text-2xl font-bold">Guide not found</h1>
+          <h1 className="mb-2 text-2xl font-bold">{t('liveSession.guideNotFound')}</h1>
           <Button onClick={() => navigate('/live/join')} className="mt-4">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Join
+            {t('liveSession.backToJoin')}
           </Button>
         </div>
       </div>
@@ -296,21 +343,22 @@ export function StudentLiveSession() {
         <div className="mx-auto max-w-4xl px-6 py-8">
           <div className="flex items-center gap-2 mb-4">
             <Radio className="h-5 w-5 text-primary animate-pulse" />
-            <span className="text-sm font-medium text-primary">Live Session</span>
+            <span className="text-sm font-medium text-primary">{t('liveSession.liveSession')}</span>
             {sessionStatus === 'waiting' && (
               <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
-                Waiting to start...
+                <Timer className="mr-1 h-3 w-3" />
+                {t('liveSession.waiting')}
               </Badge>
             )}
             {sessionStatus === 'running' && (
               <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
                 <CheckCircle2 className="mr-1 h-3 w-3" />
-                Active
+                {t('liveSession.active')}
               </Badge>
             )}
             {sessionStatus === 'finished' && (
               <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-500/20">
-                Finished
+                {t('liveSession.finished')}
               </Badge>
             )}
           </div>
@@ -324,7 +372,7 @@ export function StudentLiveSession() {
             </span>
             <Badge variant="outline" className={diff.color}>
               <DiffIcon className="mr-1 h-3 w-3" />
-              {t(diff.labelKey)}
+              {t(`createGuide.difficulty${guide.difficulty.charAt(0).toUpperCase() + guide.difficulty.slice(1)}`)}
             </Badge>
             <span className="flex items-center gap-1">
               <Users className="h-3.5 w-3.5" />
@@ -335,7 +383,7 @@ export function StudentLiveSession() {
           {totalLocked > 0 && (
             <div className="mt-4">
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                <span>Progress: {unlockedCount}/{totalLocked}</span>
+                <span>{t('liveSession.progress')}: {unlockedCount}/{totalLocked}</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
@@ -386,7 +434,7 @@ export function StudentLiveSession() {
                     )}
 
                     <CardTitle className="text-base">
-                      <span className="text-primary">Phase {index + 1}</span>
+                      <span className="text-primary">{t('publicView.phase')} {index + 1}</span>
                       <span className="mx-2 text-muted-foreground">—</span>
                       {phase.title}
                     </CardTitle>
@@ -395,7 +443,7 @@ export function StudentLiveSession() {
                       {locked && phase.unlockType === 'llm' && (
                         <Badge variant="secondary" className="text-xs">
                           <Brain className="mr-1 h-3 w-3" />
-                          AI Question
+                          {t('editor.unlockAiQuestion')}
                         </Badge>
                       )}
                       {!locked && (
@@ -421,12 +469,12 @@ export function StudentLiveSession() {
                       <>
                         <div className="flex items-center gap-2">
                           <Lock className="h-4 w-4 text-orange-500" />
-                          <span className="text-sm text-muted-foreground">Enter password to unlock</span>
+                          <span className="text-sm text-muted-foreground">{t('publicView.enterPassword')}</span>
                         </div>
                         <div className="mt-3 flex gap-2">
                           <Input
                             type="password"
-                            placeholder="Password"
+                            placeholder={t('publicView.phasePasswordPlaceholder')}
                             value={userInputs[phase.id] || ''}
                             onChange={(e) =>
                               setUserInputs((prev) => ({
@@ -450,7 +498,7 @@ export function StudentLiveSession() {
                             ) : (
                               <Unlock className="mr-1 h-3.5 w-3.5" />
                             )}
-                            Unlock
+                            {t('publicView.unlock')}
                           </Button>
                         </div>
                       </>
@@ -460,7 +508,7 @@ export function StudentLiveSession() {
                       <>
                         <div className="flex items-center gap-2">
                           <Brain className="h-4 w-4 text-purple-500" />
-                          <span className="text-sm text-muted-foreground">Answer the question</span>
+                          <span className="text-sm text-muted-foreground">{t('publicView.answerQuestion')}</span>
                         </div>
                         {phase.question && (
                           <div className="mt-3 rounded-md border bg-background p-3">
@@ -470,7 +518,7 @@ export function StudentLiveSession() {
                         <div className="mt-3 flex items-center gap-2">
                           <Input
                             type="text"
-                            placeholder="Your answer"
+                            placeholder={t('publicView.yourAnswerPlaceholder')}
                             value={userInputs[phase.id] || ''}
                             onChange={(e) =>
                               setUserInputs((prev) => ({
@@ -492,12 +540,12 @@ export function StudentLiveSession() {
                             {verifying.has(phase.id) ? (
                               <>
                                 <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                Checking...
+                                {t('publicView.checking')}
                               </>
                             ) : (
                               <>
                                 <Brain className="mr-1 h-3.5 w-3.5" />
-                                Submit
+                                {t('publicView.submit')}
                               </>
                             )}
                           </Button>
