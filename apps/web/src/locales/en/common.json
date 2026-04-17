@@ -185,7 +185,14 @@
     "exporting": "Exporting...",
     "exportMarkdownSuccess": "Guide exported as Markdown",
     "exportPdfSuccess": "Guide exported as PDF",
-    "exportPdfError": "Failed to export PDF"
+    "exportPdfError": "Failed to export PDF",
+    "aiRewrite": "AI Rewrite",
+    "rewriteDialogTitle": "Rewrite with AI",
+    "rewriteDialogDesc": "Choose a tone to rewrite the phase content. Technical details like commands and code will be preserved.",
+    "rewrite": "Rewrite",
+    "rewriting": "Rewriting...",
+    "rewriteSuccess": "Content rewritten successfully!",
+    "rewriteError": "Failed to rewrite content. Try again."
   },
   "collaboration": {
     "inviteCollaborator": "Invite Collaborator",

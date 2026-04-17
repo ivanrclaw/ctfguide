@@ -35,7 +35,7 @@ export class Invitation {
   inviter: User;
 
   @Column({
-    type: 'enum',
+    type: 'simple-enum',
     enum: InvitationStatus,
     default: InvitationStatus.PENDING,
   })

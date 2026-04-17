@@ -11,6 +11,7 @@ import { PublicModule } from './public/public.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { InvitationsModule } from './invitations/invitations.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
+import { LiveSessionsModule } from './live-sessions/live-sessions.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { Reflector } from '@nestjs/core';
 
@@ -20,12 +21,8 @@ import { Reflector } from '@nestjs/core';
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        type: 'postgres' as const,
-        host: configService.get<string>('DB_HOST', 'localhost'),
-        port: configService.get<number>('DB_PORT', 5432),
-        username: configService.get<string>('DB_USERNAME', 'postgres'),
-        password: configService.get<string>('DB_PASSWORD', 'postgres'),
-        database: configService.get<string>('DB_DATABASE', 'ctfguide'),
+        type: 'better-sqlite3' as const,
+        database: configService.get<string>('DB_PATH', 'ctfguide.db'),
         autoLoadEntities: true,
         synchronize: true,
       }),
@@ -38,6 +35,7 @@ import { Reflector } from '@nestjs/core';
     PhasesModule,
     PublicModule,
     UploadsModule,
+    LiveSessionsModule,
   ],
   controllers: [AppController],
   providers: [

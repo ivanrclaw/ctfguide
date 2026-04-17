@@ -185,7 +185,14 @@
     "exporting": "Exportando...",
     "exportMarkdownSuccess": "Guía exportada como Markdown",
     "exportPdfSuccess": "Guía exportada como PDF",
-    "exportPdfError": "Error al exportar el PDF"
+    "exportPdfError": "Error al exportar el PDF",
+    "aiRewrite": "Reescribir con IA",
+    "rewriteDialogTitle": "Reescribir con IA",
+    "rewriteDialogDesc": "Elige un tono para reescribir el contenido de la fase. Los detalles técnicos como comandos y código se preservarán.",
+    "rewrite": "Reescribir",
+    "rewriting": "Reescribiendo...",
+    "rewriteSuccess": "¡Contenido reescrito con éxito!",
+    "rewriteError": "Error al reescribir el contenido. Inténtalo de nuevo."
   },
   "collaboration": {
     "inviteCollaborator": "Invitar Colaborador",

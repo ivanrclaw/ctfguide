@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as puppeteer from 'puppeteer-core';
+import { marked } from 'marked';
 
 @Injectable()
 export class PdfService {
@@ -9,7 +10,7 @@ export class PdfService {
     const phasesHtml = sortedPhases.map((phase, i) => `
       <section class="phase">
         <h2>Phase ${i + 1}: ${this.escapeHtml(phase.title)}</h2>
-        ${phase.content ? `<div class="content">${this.escapeHtml(phase.content)}</div>` : '<p><em>No content yet.</em></p>'}
+        ${phase.content ? `<div class="content">${marked.parse(phase.content)}</div>` : '<p><em>No content yet.</em></p>'}
         ${i < sortedPhases.length - 1 ? '<hr>' : ''}
       </section>
     `).join('');
@@ -45,6 +46,12 @@ export class PdfService {
     code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 12px; }
     pre code { background: none; padding: 0; }
     a { color: #2563eb; }
+    ul, ol { margin: 8px 0 8px 20px; }
+    li { margin: 2px 0; }
+    table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+    th, td { border: 1px solid #ddd; padding: 6px 10px; text-align: left; font-size: 12px; }
+    th { background: #f5f5f5; font-weight: 600; }
+    img { max-width: 100%; height: auto; margin: 8px 0; }
     .phase { page-break-inside: avoid; }
   </style>
 </head>

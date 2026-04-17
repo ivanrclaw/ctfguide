@@ -8,6 +8,9 @@ import { RegisterPage } from '@/pages/register';
 import { Dashboard } from '@/pages/dashboard';
 import { Editor } from '@/pages/editor';
 import { PublicView } from '@/pages/public-view';
+import { JoinLiveSession } from '@/pages/join-live-session';
+import { HostLiveSession } from '@/pages/host-live-session';
+import { StudentLiveSession } from '@/pages/student-live-session';
 import { WebSocketProvider } from '@/contexts/websocket-context';
 
 function App() {
@@ -19,10 +22,13 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/view/:slug" element={<PublicView />} />
+          <Route path="/live/join" element={<JoinLiveSession />} />
+          <Route path="/live/:code/:name" element={<StudentLiveSession />} />
         </Route>
         <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/editor/:guideId" element={<Editor />} />
+          <Route path="/live/host/:sessionId" element={<HostLiveSession />} />
         </Route>
       </Routes>
     </WebSocketProvider>

@@ -83,9 +83,9 @@ export function InvitationNotification() {
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+        className="relative rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
       >
-        <Bell className="w-6 h-6" />
+        <Bell className="h-4 w-4" />
         {pendingInvitations.length > 0 && (
           <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
             {pendingInvitations.length}

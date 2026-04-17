@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Trash2, Pencil, Globe } from 'lucide-react';
+import { Trash2, Pencil, Globe, Radio } from 'lucide-react';
+import { toast } from 'sonner';
+
+const API = (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
 
 const categoryColors: Record<string, string> = {
   web: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
@@ -63,6 +67,27 @@ interface GuideCardProps {
 export function GuideCard({ guide, onDelete }: GuideCardProps) {
   const navigate = useNavigate();
   const { t } = useTranslation('common');
+  const [creatingSession, setCreatingSession] = useState(false);
+
+  const startLiveSession = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCreatingSession(true);
+    try {
+      const token = localStorage.getItem('ctfguide_token');
+      const res = await fetch(`${API}/live-sessions/${guide.id}/create`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to create session');
+      const data = await res.json();
+      toast.success(`Live session created! Code: ${data.code}`);
+      navigate(`/live/host/${data.id}`);
+    } catch {
+      toast.error('Failed to create live session');
+    } finally {
+      setCreatingSession(false);
+    }
+  };
 
   return (
     <Card className="group cursor-pointer transition-shadow hover:shadow-md" onClick={() => navigate(`/editor/${guide.id}`)}>
@@ -72,6 +97,16 @@ export function GuideCard({ guide, onDelete }: GuideCardProps) {
           <p className="text-sm text-muted-foreground">{guide.ctfName}</p>
         </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-primary hover:text-primary/80"
+            title="Start Live Session"
+            onClick={startLiveSession}
+            disabled={creatingSession}
+          >
+            <Radio className="h-4 w-4" />
+          </Button>
           {guide.published && (
             <Button variant="ghost" size="icon" className="text-green-500" title={t('guideCard.published')}>
               <Globe className="h-4 w-4" />

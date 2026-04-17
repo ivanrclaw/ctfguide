@@ -6,8 +6,8 @@ SaaS platform for creating user guides oriented to CTFs (Capture The Flag compet
 
 - **Monorepo**: Turborepo + pnpm workspaces
 - **Frontend**: React 19 + Vite 6 + TypeScript + shadcn/ui + Tailwind CSS v4
-- **Backend**: NestJS 11 + TypeORM + PostgreSQL
-- **Deployment**: Docker Compose
+- **Backend**: NestJS 11 + TypeORM + SQLite
+- **Deployment**: Docker Compose, Fly.io
 
 ## Project Structure
 

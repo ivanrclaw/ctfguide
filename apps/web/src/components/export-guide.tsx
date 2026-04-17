@@ -32,6 +32,8 @@ interface Guide {
 
 interface ExportGuideProps {
   guide: Guide;
+  /** Override phases with latest local state (avoids stale data from prop) */
+  currentPhases?: Phase[];
 }
 
 function assembleMarkdown(guide: Guide): string {
@@ -88,12 +90,14 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ExportGuide({ guide }: ExportGuideProps) {
+export function ExportGuide({ guide, currentPhases }: ExportGuideProps) {
   const { t } = useTranslation('common');
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const handleExportMarkdown = useCallback(() => {
-    const md = assembleMarkdown(guide);
+    // Use currentPhases if provided (latest local edits), fall back to guide.phases
+    const effectiveGuide = currentPhases ? { ...guide, phases: currentPhases } : guide;
+    const md = assembleMarkdown(effectiveGuide);
     const safeName = guide.title.replace(/[^a-zA-Z0-9_-]/g, '_');
     downloadFile(md, `${safeName}.md`, 'text/markdown;charset=utf-8');
     toast.success(t('editor.exportMarkdownSuccess'));

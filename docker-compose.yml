@@ -1,39 +1,18 @@
 services:
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USERNAME:-ctfguide}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-ctfguide_secret}
-      POSTGRES_DB: ${DB_DATABASE:-ctfguide}
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-ctfguide}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   api:
     build:
       context: .
-      dockerfile: apps/api/Dockerfile
+      dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "${PORT:-3001}:3001"
     environment:
       NODE_ENV: production
       PORT: 3001
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: ${DB_USERNAME:-ctfguide}
-      DB_PASSWORD: ${DB_PASSWORD:-ctfguide_secret}
-      DB_DATABASE: ${DB_DATABASE:-ctfguide}
-    depends_on:
-      postgres:
-        condition: service_healthy
+      DB_PATH: /data/ctfguide.db
+      DATA_DIR: /data
+    volumes:
+      - sqlite-data:/data
 
   web:
     build:
@@ -48,4 +27,4 @@ services:
       - api
 
 volumes:
-  pgdata:
+  sqlite-data:

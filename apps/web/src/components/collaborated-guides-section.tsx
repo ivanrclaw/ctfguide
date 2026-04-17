@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { getMyCollaboratedGuides } from '../api/invitations';
+import { useWebSocket } from '@/contexts/websocket-context';
 import { Users } from 'lucide-react';
 
 interface CollaboratedGuide {
@@ -17,6 +18,7 @@ interface CollaboratedGuide {
 export function CollaboratedGuidesSection() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { socket } = useWebSocket();
   const [collaboratedGuides, setCollaboratedGuides] = useState<CollaboratedGuide[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +39,16 @@ export function CollaboratedGuidesSection() {
   useEffect(() => {
     loadCollaboratedGuides();
   }, []);
+
+  // Refresh when an invitation is accepted (real-time update)
+  useEffect(() => {
+    if (socket) {
+      socket.on('invitation:accepted', loadCollaboratedGuides);
+      return () => {
+        socket.off('invitation:accepted', loadCollaboratedGuides);
+      };
+    }
+  }, [socket]);
 
   return (
     <div className="mb-8">

@@ -29,15 +29,11 @@ RUN pnpm prune --prod
 # ---- Stage 2: Production ----
 FROM node:22-bookworm
 
-# Install PostgreSQL + Chromium for PDF
+# Install Chromium for PDF generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    postgresql \
-    postgresql-client \
     chromium \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/cache/apt/* \
-    && echo "Chromium installed: $(which chromium)" \
-    && groupadd -r postgres || true \
-    && useradd -r -g postgres postgres || true
+    && echo "Chromium installed: $(which chromium)"
 
 WORKDIR /app
 
@@ -62,12 +58,7 @@ ARG JWT_SECRET=ctfguide_prod_change_this_in_fly_secrets
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Ensure postgres user exists (may already exist from postgresql package)
-RUN groupadd -r postgres || true && \
-    useradd -r -g postgres postgres || true && \
-    echo "postgres user uid=$(id -u postgres) gid=$(id -g postgres)"
-
-# Data volume for PostgreSQL + uploads
+# Data volume for SQLite database + uploads
 VOLUME ["/data"]
 
 EXPOSE 3001

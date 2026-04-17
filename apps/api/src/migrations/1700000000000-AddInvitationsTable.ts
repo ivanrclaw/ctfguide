@@ -8,30 +8,27 @@ export class AddInvitationsTable1700000000000 implements MigrationInterface {
         columns: [
           {
             name: 'id',
-            type: 'uuid',
+            type: 'varchar',
             isPrimary: true,
-            generationStrategy: 'uuid',
-            default: 'gen_random_uuid()',
           },
           {
             name: 'guide_id',
-            type: 'uuid',
+            type: 'varchar',
             isNullable: false,
           },
           {
             name: 'invited_user_id',
-            type: 'uuid',
+            type: 'varchar',
             isNullable: true,
           },
           {
             name: 'inviter_id',
-            type: 'uuid',
+            type: 'varchar',
             isNullable: false,
           },
           {
             name: 'status',
-            type: 'enum',
-            enum: ['pending', 'accepted', 'declined'],
+            type: 'varchar',
             default: "'pending'",
           },
           {
@@ -48,17 +45,17 @@ export class AddInvitationsTable1700000000000 implements MigrationInterface {
           },
           {
             name: 'created_at',
-            type: 'timestamp',
+            type: 'datetime',
             default: 'CURRENT_TIMESTAMP',
           },
           {
             name: 'accepted_at',
-            type: 'timestamp',
+            type: 'datetime',
             isNullable: true,
           },
           {
             name: 'declined_at',
-            type: 'timestamp',
+            type: 'datetime',
             isNullable: true,
           },
         ],

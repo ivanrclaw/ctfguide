@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { io, Socket } from 'socket.io-client';
 import { useTranslation } from 'react-i18next';
 import { MarkdownPreview } from '@/components/markdown-preview';
 import { Button } from '@/components/ui/button';
@@ -20,11 +21,17 @@ import {
   Hash,
   Brain,
   Loader2,
-  RotateCcw,
+  Radio,
+  Users,
+  ArrowLeft,
+  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface PublicPhase {
+const PUBLIC_API = (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
+const WS_URL = import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '');
+
+interface Phase {
   id: string;
   title: string;
   content: string;
@@ -32,61 +39,36 @@ interface PublicPhase {
   unlockType: 'none' | 'password' | 'llm';
   hasPassword: boolean;
   question: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
-interface PublicGuide {
-  guide: {
-    id: string;
-    title: string;
-    description: string;
-    ctfName: string;
-    category: string;
-    difficulty: string;
-    published: boolean;
-    author: { username: string };
-    createdAt: string;
-  };
-  phases: PublicPhase[];
+interface GuideInfo {
+  id: string;
+  title: string;
+  description: string;
+  ctfName: string;
+  category: string;
+  difficulty: string;
 }
 
-const PROGRESS_KEY = 'ctfguide_progress';
-
-const PUBLIC_API = (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
-
-function loadProgress(slug: string): Set<string> {
-  try {
-    const raw = localStorage.getItem(PROGRESS_KEY);
-    if (!raw) return new Set();
-    const data = JSON.parse(raw);
-    return new Set(data[slug] || []);
-  } catch {
-    return new Set();
-  }
-}
-
-function saveProgress(slug: string, unlockedIds: Set<string>) {
-  try {
-    const raw = localStorage.getItem(PROGRESS_KEY);
-    const data = raw ? JSON.parse(raw) : {};
-    data[slug] = Array.from(unlockedIds);
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify(data));
-  } catch {
-    // Silently fail
-  }
-}
-
-export function PublicView() {
-  const { slug } = useParams<{ slug: string }>();
+export function StudentLiveSession() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { code, name } = useParams<{ code: string; name: string }>();
   const { t } = useTranslation('common');
-  const [guide, setGuide] = useState<PublicGuide | null>(null);
+
+  const [phases, setPhases] = useState<Phase[]>([]);
+  const [guide, setGuide] = useState<GuideInfo | null>(null);
   const [unlockedPhases, setUnlockedPhases] = useState<Set<string>>(new Set());
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [userInputs, setUserInputs] = useState<Record<string, string>>({});
   const [verifying, setVerifying] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<'waiting' | 'running' | 'finished'>('waiting');
+
+  const socketRef = useRef<Socket | null>(null);
+  const participantRef = useRef<any>(location.state?.participant || null);
+
+  const decodedName = decodeURIComponent(name || '');
 
   const difficultyConfig: Record<string, { icon: typeof Shield; labelKey: string; color: string }> = {
     beginner: { icon: Shield, labelKey: 'publicView.difficultyBeginner', color: 'bg-green-500/10 text-green-600 border-green-500/20' },
@@ -96,78 +78,134 @@ export function PublicView() {
     insane: { icon: Skull, labelKey: 'publicView.difficultyInsane', color: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
   };
 
-  const categoryEmojis: Record<string, string> = {
-    web: '🌐',
-    pwn: '💥',
-    reverse: '🔧',
-    crypto: '🔐',
-    forensics: '🔍',
-    misc: '🎯',
-    osint: '🕵️',
-    blockchain: '⛓️',
-  };
-
-  // Add unlocked phase and persist
-  const addUnlocked = useCallback((phaseId: string) => {
-    setUnlockedPhases((prev) => {
-      const next = new Set([...prev, phaseId]);
-      if (slug) saveProgress(slug, next);
-      return next;
-    });
-  }, [slug]);
-
+  // Fetch guide phases
   useEffect(() => {
-    if (!slug) return;
-    fetch(`${PUBLIC_API}/public/guide/${slug}`)
-      .then((res) => {
-        if (!res.ok) throw new Error('Not found');
-        return res.json();
-      })
-      .then((data: PublicGuide) => {
-        setGuide(data);
-        // Load persisted progress
-        const saved = loadProgress(slug);
-        // Auto-unlock phases with no unlock type
-        const autoUnlocked = data.phases
-          .filter((p) => p.unlockType === 'none')
-          .map((p) => p.id);
-        const initial = new Set([...saved, ...autoUnlocked]);
-        setUnlockedPhases(initial);
-        if (slug) saveProgress(slug, initial);
-        // Auto-expand first accessible phase
-        if (data.phases.length > 0) {
-          const firstAccessible = data.phases.find((p) => initial.has(p.id));
-          if (firstAccessible) {
-            setExpandedPhases(new Set([firstAccessible.id]));
-          }
-        }
-      })
-      .catch(() => setNotFound(true))
-      .finally(() => setIsLoading(false));
-  }, [slug]);
+    if (!code) return;
 
-  const verifyPhase = async (phase: PublicPhase) => {
+    // Load phases via session context
+    const loadSessionPhases = async () => {
+      try {
+        const sessionRes = await fetch(`${PUBLIC_API}/public/live-sessions/${code}`);
+        if (!sessionRes.ok) {
+          navigate('/live/join');
+          return;
+        }
+        const sessionData = await sessionRes.json();
+        setGuide(sessionData.guide);
+        setSessionStatus(sessionData.status);
+
+        // Fetch phases via the dedicated endpoint
+        const phasesRes = await fetch(`${PUBLIC_API}/public/live-sessions/${code}/phases`);
+        if (phasesRes.ok) {
+          const phasesData = await phasesRes.json();
+          setPhases(phasesData);
+        }
+      } catch {
+        toast.error('Failed to load session');
+        navigate('/live/join');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // If we have session info from state, use it
+    if (location.state?.session?.guide) {
+      setGuide(location.state.session.guide);
+      setSessionStatus(location.state.session.status);
+      // Fetch phases via dedicated endpoint
+      fetch(`${PUBLIC_API}/public/live-sessions/${code}/phases`)
+        .then((res) => res.ok ? res.json() : Promise.reject())
+        .then((data) => {
+          setPhases(data);
+        })
+        .catch(() => {
+          toast.error('Failed to load guide phases');
+        })
+        .finally(() => setIsLoading(false));
+    } else {
+      loadSessionPhases();
+    }
+  }, [code, navigate, location.state]);
+
+  // Setup WebSocket
+  useEffect(() => {
+    if (!code || !name) return;
+
+    const socket = io(`${WS_URL}/live-sessions`, {
+      path: '/api/socket.io',
+      transports: ['websocket', 'polling'],
+      query: { name: decodedName },
+      reconnection: true,
+    });
+
+    socket.on('connect', () => {
+      if (participantRef.current) {
+        socket.emit('student:join', {
+          sessionId: participantRef.current.sessionId,
+          name: decodedName,
+          participantId: participantRef.current.id,
+        });
+      }
+    });
+
+    socket.on('session:started', () => {
+      setSessionStatus('running');
+      toast.success('Session started! You can now begin solving.');
+    });
+
+    socket.on('session:finished', () => {
+      setSessionStatus('finished');
+      toast.info('Session has ended.');
+    });
+
+    socket.on('session:participantProgress', (data: any) => {
+      if (data.name === decodedName) {
+        // Update own progress if needed
+      }
+    });
+
+    socketRef.current = socket;
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [code, name, decodedName]);
+
+  const addUnlocked = useCallback((phaseId: string) => {
+    setUnlockedPhases((prev) => new Set([...prev, phaseId]));
+  }, []);
+
+  const verifyPhase = async (phase: Phase) => {
     const userInput = userInputs[phase.id] || '';
     if (!userInput.trim()) {
       toast.error(t('publicView.errorEnterAnswer'));
       return;
     }
 
+    if (sessionStatus !== 'running' && phase.unlockType !== 'none') {
+      toast.error('Session is not running yet');
+      return;
+    }
+
     setVerifying((prev) => new Set([...prev, phase.id]));
     try {
-      const body: Record<string, string> = {};
+      const body: Record<string, string> = { name: decodedName };
       if (phase.unlockType === 'password') {
         body.password = userInput;
       } else if (phase.unlockType === 'llm') {
         body.answer = userInput;
       }
 
-      const res = await fetch(`${PUBLIC_API}/public/phase/${phase.id}/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(
+        `${PUBLIC_API}/public/live-sessions/${code}/phase/${phase.id}/unlock`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        },
+      );
       const data = await res.json();
+
       if (data.valid) {
         addUnlocked(phase.id);
         setExpandedPhases((prev) => new Set([...prev, phase.id]));
@@ -176,6 +214,18 @@ export function PublicView() {
           delete next[phase.id];
           return next;
         });
+
+        // Emit to WebSocket
+        if (socketRef.current && participantRef.current) {
+          socketRef.current.emit('student:answer', {
+            sessionId: participantRef.current.sessionId,
+            name: decodedName,
+            phaseId: phase.id,
+            valid: true,
+            unlockedPhaseIndex: data.unlockedPhaseIndex,
+          });
+        }
+
         toast.success(t('publicView.successUnlocked'));
       } else {
         toast.error(
@@ -204,109 +254,93 @@ export function PublicView() {
     });
   };
 
-  const resetProgress = () => {
-    if (!slug) return;
-    setUnlockedPhases(new Set());
-    setExpandedPhases(new Set());
-    setUserInputs({});
-    saveProgress(slug, new Set());
-    // Re-auto-unlock free phases
-    if (guide) {
-      const autoUnlocked = guide.phases
-        .filter((p) => p.unlockType === 'none')
-        .map((p) => p.id);
-      const initial = new Set(autoUnlocked);
-      setUnlockedPhases(initial);
-      saveProgress(slug, initial);
-      if (autoUnlocked.length > 0) {
-        setExpandedPhases(new Set([autoUnlocked[0]]));
-      }
-    }
-    toast.success(t('publicView.progressReset'));
-  };
-
-  const isPhaseLocked = (phase: PublicPhase) => {
+  const isPhaseLocked = (phase: Phase) => {
     return phase.unlockType !== 'none' && !unlockedPhases.has(phase.id);
   };
-
-  // Count progress
-  const lockedCount = guide
-    ? guide.phases.filter((p) => p.unlockType !== 'none' && !unlockedPhases.has(p.id)).length
-    : 0;
-  const totalLocked = guide
-    ? guide.phases.filter((p) => p.unlockType !== 'none').length
-    : 0;
-  const hasProgress = totalLocked > 0 && lockedCount < totalLocked;
 
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="mb-4 h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mx-auto" />
-          <p className="text-muted-foreground">{t('publicView.loadingGuide')}</p>
+          <p className="text-muted-foreground">Loading session...</p>
         </div>
       </div>
     );
   }
 
-  if (notFound || !guide) {
+  if (!guide || phases.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <Trophy className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
-          <h1 className="mb-2 text-2xl font-bold">{t('publicView.notFound')}</h1>
-          <p className="text-muted-foreground">{t('publicView.notFoundDescription')}</p>
+          <h1 className="mb-2 text-2xl font-bold">Guide not found</h1>
+          <Button onClick={() => navigate('/live/join')} className="mt-4">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Join
+          </Button>
         </div>
       </div>
     );
   }
 
-  const diff = difficultyConfig[guide.guide.difficulty] || difficultyConfig.beginner;
+  const diff = difficultyConfig[guide.difficulty] || difficultyConfig.beginner;
   const DiffIcon = diff.icon;
-  const emoji = categoryEmojis[guide.guide.category] || '🏁';
+  const totalLocked = phases.filter((p) => p.unlockType !== 'none').length;
+  const unlockedCount = phases.filter((p) => p.unlockType !== 'none' && unlockedPhases.has(p.id)).length;
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero header */}
+      {/* Header */}
       <div className="relative border-b bg-gradient-to-b from-primary/5 to-transparent">
-        <div className="mx-auto max-w-4xl px-6 py-12">
-          <div className="mb-4 flex items-center gap-2">
+        <div className="mx-auto max-w-4xl px-6 py-8">
+          <div className="flex items-center gap-2 mb-4">
+            <Radio className="h-5 w-5 text-primary animate-pulse" />
+            <span className="text-sm font-medium text-primary">Live Session</span>
+            {sessionStatus === 'waiting' && (
+              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
+                Waiting to start...
+              </Badge>
+            )}
+            {sessionStatus === 'running' && (
+              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+                Active
+              </Badge>
+            )}
+            {sessionStatus === 'finished' && (
+              <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-500/20">
+                Finished
+              </Badge>
+            )}
+          </div>
+
+          <h1 className="mb-2 text-3xl font-bold tracking-tight">{guide.title}</h1>
+          <p className="mb-3 text-muted-foreground">{guide.description}</p>
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Hash className="h-3.5 w-3.5" />
+              {guide.ctfName}
+            </span>
             <Badge variant="outline" className={diff.color}>
               <DiffIcon className="mr-1 h-3 w-3" />
               {t(diff.labelKey)}
             </Badge>
-            <Badge variant="secondary">
-              {emoji} {guide.guide.category}
-            </Badge>
+            <span className="flex items-center gap-1">
+              <Users className="h-3.5 w-3.5" />
+              {decodedName}
+            </span>
           </div>
-          <h1 className="mb-2 text-4xl font-bold tracking-tight">{guide.guide.title}</h1>
-          <p className="mb-4 text-lg text-muted-foreground">{guide.guide.description}</p>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Hash className="h-3.5 w-3.5" />
-                {guide.guide.ctfName}
-              </span>
-              <span>{t('publicView.by')} {guide.guide.author.username}</span>
-              <span>{new Date(guide.guide.createdAt).toLocaleDateString()}</span>
-            </div>
-            {hasProgress && (
-              <Button variant="outline" size="sm" onClick={resetProgress}>
-                <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                {t('publicView.resetProgress')}
-              </Button>
-            )}
-          </div>
-          {/* Progress bar */}
+
           {totalLocked > 0 && (
             <div className="mt-4">
               <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                <span>{t('publicView.progress')}: {totalLocked - lockedCount}/{totalLocked}</span>
+                <span>Progress: {unlockedCount}/{totalLocked}</span>
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-primary transition-all duration-500"
-                  style={{ width: `${((totalLocked - lockedCount) / totalLocked) * 100}%` }}
+                  style={{ width: `${totalLocked > 0 ? (unlockedCount / totalLocked) * 100 : 0}%` }}
                 />
               </div>
             </div>
@@ -314,10 +348,10 @@ export function PublicView() {
         </div>
       </div>
 
-      {/* Phase content */}
+      {/* Phases */}
       <div className="mx-auto max-w-4xl px-6 py-8">
         <div className="space-y-4">
-          {guide.phases.map((phase, index) => {
+          {phases.map((phase, index) => {
             const locked = isPhaseLocked(phase);
             const isExpanded = expandedPhases.has(phase.id);
 
@@ -352,7 +386,7 @@ export function PublicView() {
                     )}
 
                     <CardTitle className="text-base">
-                      <span className="text-primary">{t('publicView.phase')} {index + 1}</span>
+                      <span className="text-primary">Phase {index + 1}</span>
                       <span className="mx-2 text-muted-foreground">—</span>
                       {phase.title}
                     </CardTitle>
@@ -361,7 +395,7 @@ export function PublicView() {
                       {locked && phase.unlockType === 'llm' && (
                         <Badge variant="secondary" className="text-xs">
                           <Brain className="mr-1 h-3 w-3" />
-                          {t('editor.unlockAiQuestion')}
+                          AI Question
                         </Badge>
                       )}
                       {!locked && (
@@ -387,14 +421,12 @@ export function PublicView() {
                       <>
                         <div className="flex items-center gap-2">
                           <Lock className="h-4 w-4 text-orange-500" />
-                          <span className="text-sm text-muted-foreground">
-                            {t('publicView.enterPassword')}
-                          </span>
+                          <span className="text-sm text-muted-foreground">Enter password to unlock</span>
                         </div>
                         <div className="mt-3 flex gap-2">
                           <Input
                             type="password"
-                            placeholder={t('publicView.phasePasswordPlaceholder')}
+                            placeholder="Password"
                             value={userInputs[phase.id] || ''}
                             onChange={(e) =>
                               setUserInputs((prev) => ({
@@ -406,14 +438,19 @@ export function PublicView() {
                               if (e.key === 'Enter') verifyPhase(phase);
                             }}
                             className="max-w-xs"
+                            disabled={sessionStatus !== 'running'}
                           />
                           <Button
                             size="sm"
                             onClick={() => verifyPhase(phase)}
-                            disabled={verifying.has(phase.id)}
+                            disabled={verifying.has(phase.id) || sessionStatus !== 'running'}
                           >
-                            <Unlock className="mr-1 h-3.5 w-3.5" />
-                            {t('publicView.unlock')}
+                            {verifying.has(phase.id) ? (
+                              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Unlock className="mr-1 h-3.5 w-3.5" />
+                            )}
+                            Unlock
                           </Button>
                         </div>
                       </>
@@ -423,9 +460,7 @@ export function PublicView() {
                       <>
                         <div className="flex items-center gap-2">
                           <Brain className="h-4 w-4 text-purple-500" />
-                          <span className="text-sm text-muted-foreground">
-                            {t('publicView.answerQuestion')}
-                          </span>
+                          <span className="text-sm text-muted-foreground">Answer the question</span>
                         </div>
                         {phase.question && (
                           <div className="mt-3 rounded-md border bg-background p-3">
@@ -435,7 +470,7 @@ export function PublicView() {
                         <div className="mt-3 flex items-center gap-2">
                           <Input
                             type="text"
-                            placeholder={t('publicView.yourAnswerPlaceholder')}
+                            placeholder="Your answer"
                             value={userInputs[phase.id] || ''}
                             onChange={(e) =>
                               setUserInputs((prev) => ({
@@ -447,21 +482,22 @@ export function PublicView() {
                               if (e.key === 'Enter') verifyPhase(phase);
                             }}
                             className="max-w-md"
+                            disabled={sessionStatus !== 'running'}
                           />
                           <Button
                             size="sm"
                             onClick={() => verifyPhase(phase)}
-                            disabled={verifying.has(phase.id)}
+                            disabled={verifying.has(phase.id) || sessionStatus !== 'running'}
                           >
                             {verifying.has(phase.id) ? (
                               <>
                                 <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                                {t('publicView.checking')}
+                                Checking...
                               </>
                             ) : (
                               <>
                                 <Brain className="mr-1 h-3.5 w-3.5" />
-                                {t('publicView.submit')}
+                                Submit
                               </>
                             )}
                           </Button>
@@ -474,13 +510,6 @@ export function PublicView() {
             );
           })}
         </div>
-
-        {guide.phases.length === 0 && (
-          <div className="py-12 text-center text-muted-foreground">
-            <Trophy className="mx-auto mb-4 h-12 w-12" />
-            <p>{t('publicView.noPhases')}</p>
-          </div>
-        )}
       </div>
     </div>
   );

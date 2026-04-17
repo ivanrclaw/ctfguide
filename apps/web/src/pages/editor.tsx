@@ -27,9 +27,19 @@ import {
   Cloud,
   CloudOff,
   ImageIcon,
+  Wand2,
+  Loader2,
 } from 'lucide-react';
 import { ExportGuide } from '@/components/export-guide';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DndContext,
   closestCenter,
@@ -157,6 +167,22 @@ export function Editor() {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [rewriteDialogOpen, setRewriteDialogOpen] = useState(false);
+  const [selectedTone, setSelectedTone] = useState('mysterious');
+  const [isRewriting, setIsRewriting] = useState(false);
+
+  const REWRITE_TONES = [
+    { id: 'mysterious', label: 'Misterioso', emoji: '🔮' },
+    { id: 'formal', label: 'Formal', emoji: '🎩' },
+    { id: 'realistic', label: 'Realista', emoji: '📰' },
+    { id: 'humorous', label: 'Humorístico', emoji: '😄' },
+    { id: 'dramatic', label: 'Dramático', emoji: '🎭' },
+    { id: 'minimalist', label: 'Minimalista', emoji: '✂️' },
+    { id: 'cyberpunk', label: 'Cyberpunk', emoji: '🌆' },
+    { id: 'pirate', label: 'Pirata', emoji: '🏴‍☠️' },
+    { id: 'detective', label: 'Detective Noir', emoji: '🕵️' },
+    { id: 'academic', label: 'Académico', emoji: '🎓' },
+  ];
 
   const activePhase = phases.find((p) => p.id === activePhaseId);
 
@@ -355,6 +381,32 @@ export function Editor() {
       toast.success(t('editor.successPhaseDeleted'));
     } catch {
       toast.error(t('editor.errorDeletePhase'));
+    }
+  };
+
+  const handleRewrite = async () => {
+    if (!activePhase || !activePhase.content) return;
+    setIsRewriting(true);
+    try {
+      const token = localStorage.getItem('ctfguide_token');
+      const res = await fetch(`/api/phases/${activePhase.id}/rewrite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tone: selectedTone }),
+      });
+      if (!res.ok) throw new Error('Rewrite failed');
+      const data = await res.json();
+      // Update the phase content
+      updatePhaseContent(activePhase.id, 'content', data.rewritten);
+      setRewriteDialogOpen(false);
+      toast.success(t('editor.rewriteSuccess'));
+    } catch {
+      toast.error(t('editor.rewriteError'));
+    } finally {
+      setIsRewriting(false);
     }
   };
 
@@ -570,7 +622,7 @@ export function Editor() {
             </div>
           )}
           {/* Export dropdown */}
-          {guide && <ExportGuide guide={guide} />}
+          {guide && <ExportGuide guide={guide} currentPhases={phases} />}
           {guide?.published ? (
             <>
               <div className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm">
@@ -769,7 +821,17 @@ export function Editor() {
                     spellCheck={false}
                   />
                   {/* Image upload button */}
-                  <div className="absolute bottom-3 right-3">
+                  <div className="absolute bottom-3 right-3 flex gap-2">
+                    {/* AI Rewrite button */}
+                    <button
+                      type="button"
+                      onClick={() => setRewriteDialogOpen(true)}
+                      className="flex items-center gap-1.5 rounded-md bg-background border px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm hover:bg-muted hover:text-primary transition-colors"
+                      title="AI Rewrite"
+                    >
+                      <Wand2 className="h-3.5 w-3.5" />
+                      {t('editor.aiRewrite')}
+                    </button>
                     <label
                       className="flex cursor-pointer items-center gap-1.5 rounded-md bg-background border px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm hover:bg-muted transition-colors"
                       title={t('editor.uploadImage')}
@@ -816,6 +878,65 @@ export function Editor() {
           )}
         </div>
       </div>
+
+      {/* AI Rewrite Dialog */}
+      <Dialog open={rewriteDialogOpen} onOpenChange={setRewriteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="h-5 w-5" />
+              {t('editor.rewriteDialogTitle')}
+            </DialogTitle>
+            <DialogDescription>
+              {t('editor.rewriteDialogDesc')}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-2 gap-2 py-2">
+            {REWRITE_TONES.map((tone) => (
+              <button
+                key={tone.id}
+                type="button"
+                onClick={() => setSelectedTone(tone.id)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-all ${
+                  selectedTone === tone.id
+                    ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                    : 'border-border hover:bg-muted hover:border-primary/50'
+                }`}
+              >
+                <span className="text-lg">{tone.emoji}</span>
+                <span>{tone.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRewriteDialogOpen(false)}
+              disabled={isRewriting}
+            >
+              {t('collaboration.cancel')}
+            </Button>
+            <Button
+              onClick={handleRewrite}
+              disabled={isRewriting || !activePhase?.content}
+            >
+              {isRewriting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t('editor.rewriting')}
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  {t('editor.rewrite')}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

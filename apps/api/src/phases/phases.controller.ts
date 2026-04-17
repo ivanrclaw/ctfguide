@@ -2,10 +2,14 @@ import { Controller, Get, Post, Patch, Delete, Body, Param, Req } from '@nestjs/
 import { Request } from 'express';
 import { PhasesService } from './phases.service';
 import { CreatePhaseDto, UpdatePhaseDto, ReorderPhasesDto, VerifyPhaseDto } from './dto/phase.dto';
+import { LlmRewriteService } from './llm-rewrite.service';
 
 @Controller('phases')
 export class PhasesController {
-  constructor(private readonly phasesService: PhasesService) {}
+  constructor(
+    private readonly phasesService: PhasesService,
+    private readonly llmRewriteService: LlmRewriteService,
+  ) {}
 
   @Post('guide/:guideId')
   async create(
@@ -69,5 +73,20 @@ export class PhasesController {
     const user = req.user as { id: string };
     await this.phasesService.unpublish(guideId, user.id);
     return { unpublished: true };
+  }
+
+  @Post(':id/rewrite')
+  async rewrite(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: { tone: string },
+  ) {
+    const user = req.user as { id: string };
+    const phase = await this.phasesService.findOne(user.id, id);
+    if (!phase?.content) {
+      throw new Error('Phase has no content to rewrite');
+    }
+    const rewritten = await this.llmRewriteService.rewrite(phase.content, body.tone as any);
+    return { rewritten };
   }
 }

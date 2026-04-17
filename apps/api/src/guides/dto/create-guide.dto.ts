@@ -14,7 +14,7 @@ export class CreateGuideDto {
   @IsString()
   category: string;
 
-  @IsEnum(['beginner', 'intermediate', 'advanced'])
+  @IsEnum(['beginner', 'easy', 'medium', 'hard', 'insane'])
   @IsOptional()
   difficulty?: string;
 }
@@ -36,7 +36,7 @@ export class UpdateGuideDto {
   @IsOptional()
   category?: string;
 
-  @IsEnum(['beginner', 'intermediate', 'advanced'])
+  @IsEnum(['beginner', 'easy', 'medium', 'hard', 'insane'])
   @IsOptional()
   difficulty?: string;
 

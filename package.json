@@ -16,7 +16,9 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "@nestjs/core",
-      "bcrypt"
-    ]
+      "bcrypt",
+      "better-sqlite3"
+    ],
+    "ignoredBuiltDependencies": []
   }
 }
