@@ -76,6 +76,8 @@ export function StudentLiveSession() {
 
   const socketRef = useRef<Socket | null>(null);
   const participantRef = useRef<any>(location.state?.participant || null);
+  const sessionStartedToastShown = useRef(false);
+  const sessionFinishedToastShown = useRef(false);
   const decodedName = decodeURIComponent(name || '');
 
   // Fetch session info and phases
@@ -159,12 +161,18 @@ export function StudentLiveSession() {
 
     socket.on('session:started', () => {
       setSessionStatus('running');
-      toast.success(t('liveSession.sessionStartedToast'));
+      if (!sessionStartedToastShown.current) {
+        sessionStartedToastShown.current = true;
+        toast.success(t('liveSession.sessionStartedToast'));
+      }
     });
 
     socket.on('session:finished', () => {
       setSessionStatus('finished');
-      toast.info(t('liveSession.sessionFinishedToast'));
+      if (!sessionFinishedToastShown.current) {
+        sessionFinishedToastShown.current = true;
+        toast.info(t('liveSession.sessionFinishedToast'));
+      }
     });
 
     socketRef.current = socket;
@@ -186,9 +194,11 @@ export function StudentLiveSession() {
           const data = await res.json();
           if (data.status !== sessionStatus) {
             setSessionStatus(data.status);
-            if (data.status === 'running') {
+            if (data.status === 'running' && !sessionStartedToastShown.current) {
+              sessionStartedToastShown.current = true;
               toast.success(t('liveSession.sessionStartedToast'));
-            } else if (data.status === 'finished') {
+            } else if (data.status === 'finished' && !sessionFinishedToastShown.current) {
+              sessionFinishedToastShown.current = true;
               toast.info(t('liveSession.sessionFinishedToast'));
             }
           }
