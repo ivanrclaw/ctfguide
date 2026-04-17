@@ -51,7 +51,6 @@ export function HostLiveSession() {
   const [stats, setStats] = useState<SessionStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionCode, setSessionCode] = useState('');
-  const [copied, setCopied] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -177,9 +176,7 @@ export function HostLiveSession() {
 
   const copyCode = () => {
     navigator.clipboard.writeText(sessionCode);
-    setCopied(true);
     toast.success(t('liveSession.codeCopied'));
-    setTimeout(() => setCopied(false), 2000);
   };
 
   if (loading || !stats) {

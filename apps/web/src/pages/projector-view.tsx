@@ -192,7 +192,7 @@ export function ProjectorView() {
             <div className="mt-12 w-full max-w-4xl">
               <h3 className="text-xl text-gray-400 mb-4 text-center">Participants</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {info.participants.map((p, i) => (
+                {info.participants.map((p) => (
                   <div
                     key={p.name}
                     className="rounded-xl bg-gray-800 p-4 text-center transition-all"
