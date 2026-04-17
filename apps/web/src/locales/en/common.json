@@ -315,5 +315,26 @@
     "waitingStatus": "Waiting for students",
     "runningStatus": "In Progress",
     "finishedStatus": "Finished"
+  },
+  "joinLive": {
+    "title": "Live Session",
+    "subtitle": "Join a live CTF guide session",
+    "enterCodeTitle": "Enter Session Code",
+    "enterCodeDesc": "Ask your instructor for the session code",
+    "enterNameTitle": "Enter Your Name",
+    "joiningTitle": "Joining...",
+    "guideLabel": "Guide",
+    "joinCodePlaceholder": "e.g. A3K7B2",
+    "continue": "Continue",
+    "lookingUp": "Looking up...",
+    "namePlaceholder": "Your name",
+    "joinSession": "Join Session",
+    "joiningText": "Connecting to session...",
+    "sessionNotFound": "Session not found",
+    "sessionEnded": "This session has ended",
+    "enterName": "Please enter your name",
+    "failedToJoin": "Failed to join session",
+    "connectionError": "Connection error. Please try again.",
+    "noRegistration": "No registration required. Just enter the code and your name."
   }
 }

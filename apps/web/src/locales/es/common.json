@@ -315,5 +315,26 @@
     "waitingStatus": "Esperando alumnos",
     "runningStatus": "En curso",
     "finishedStatus": "Finalizada"
+  },
+  "joinLive": {
+    "title": "Sesión en Vivo",
+    "subtitle": "Únete a una sesión CTF en vivo",
+    "enterCodeTitle": "Introduce el Código",
+    "enterCodeDesc": "Pídele el código de sesión a tu profesor",
+    "enterNameTitle": "Introduce tu Nombre",
+    "joiningTitle": "Conectando...",
+    "guideLabel": "Guía",
+    "joinCodePlaceholder": "ej. A3K7B2",
+    "continue": "Continuar",
+    "lookingUp": "Buscando...",
+    "namePlaceholder": "Tu nombre",
+    "joinSession": "Unirse a la Sesión",
+    "joiningText": "Conectando a la sesión...",
+    "sessionNotFound": "Sesión no encontrada",
+    "sessionEnded": "Esta sesión ha finalizado",
+    "enterName": "Por favor, introduce tu nombre",
+    "failedToJoin": "Error al unirse a la sesión",
+    "connectionError": "Error de conexión. Inténtalo de nuevo.",
+    "noRegistration": "No hace falta registro. Solo introduce el código y tu nombre."
   }
 }

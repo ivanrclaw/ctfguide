@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -10,6 +11,7 @@ const PUBLIC_API = (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
 
 export function JoinLiveSession() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,13 +27,13 @@ export function JoinLiveSession() {
       const res = await fetch(`${PUBLIC_API}/public/live-sessions/${code.trim().toUpperCase()}`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        setError(errData.message || 'Session not found');
+        setError(errData.message || t('joinLive.sessionNotFound'));
         return;
       }
       const data = await res.json();
 
       if (data.status === 'finished') {
-        setError('This session has ended');
+        setError(t('joinLive.sessionEnded'));
         return;
       }
 
@@ -45,7 +47,7 @@ export function JoinLiveSession() {
       setSessionInfo(data);
       setStep('name');
     } catch {
-      setError('Connection error. Please try again.');
+      setError(t('joinLive.connectionError'));
     } finally {
       setLoading(false);
     }
@@ -53,7 +55,7 @@ export function JoinLiveSession() {
 
   const joinSession = async () => {
     if (!name.trim()) {
-      toast.error('Please enter your name');
+      toast.error(t('joinLive.enterName'));
       return;
     }
 
@@ -99,7 +101,7 @@ export function JoinLiveSession() {
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        setError(errData.message || 'Failed to join session');
+        setError(errData.message || t('joinLive.failedToJoin'));
         setStep('name');
         return;
       }
@@ -109,7 +111,7 @@ export function JoinLiveSession() {
         state: { participant: data.participant, session: sessionInfo },
       });
     } catch {
-      setError('Connection error. Please try again.');
+      setError(t('joinLive.connectionError'));
       setStep('name');
     } finally {
       setLoading(false);
@@ -124,25 +126,25 @@ export function JoinLiveSession() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Radio className="h-8 w-8 text-primary animate-pulse" />
           </div>
-          <h1 className="text-2xl font-bold">Live Session</h1>
-          <p className="mt-2 text-muted-foreground">Join a live CTF guide session</p>
+          <h1 className="text-2xl font-bold">{t('joinLive.title')}</h1>
+          <p className="mt-2 text-muted-foreground">{t('joinLive.subtitle')}</p>
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle>
-              {step === 'code' && 'Enter Session Code'}
-              {step === 'name' && 'Enter Your Name'}
-              {step === 'joining' && 'Joining...'}
+              {step === 'code' && t('joinLive.enterCodeTitle')}
+              {step === 'name' && t('joinLive.enterNameTitle')}
+              {step === 'joining' && t('joinLive.joiningTitle')}
             </CardTitle>
             <CardDescription>
-              {step === 'code' && 'Ask your instructor for the session code'}
+              {step === 'code' && t('joinLive.enterCodeDesc')}
               {step === 'name' && sessionInfo && (
                 <span>
-                  Guide: <strong>{sessionInfo.guide?.title}</strong>
+                  {t('joinLive.guideLabel')}: <strong>{sessionInfo.guide?.title}</strong>
                 </span>
               )}
-              {step === 'joining' && 'Connecting to session...'}
+              {step === 'joining' && t('joinLive.joiningText')}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -155,7 +157,7 @@ export function JoinLiveSession() {
             {step === 'code' && (
               <div className="space-y-4">
                 <Input
-                  placeholder="e.g. A3K7B2"
+                  placeholder={t('joinLive.joinCodePlaceholder')}
                   value={code}
                   onChange={(e) => setCode(e.target.value.toUpperCase().slice(0, 6))}
                   onKeyDown={(e) => e.key === 'Enter' && lookupSession()}
@@ -171,12 +173,12 @@ export function JoinLiveSession() {
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Looking up...
+                      {t('joinLive.lookingUp')}
                     </>
                   ) : (
                     <>
                       <ArrowRight className="mr-2 h-4 w-4" />
-                      Continue
+                      {t('joinLive.continue')}
                     </>
                   )}
                 </Button>
@@ -192,7 +194,7 @@ export function JoinLiveSession() {
                   </span>
                 </div>
                 <Input
-                  placeholder="Your name"
+                  placeholder={t('joinLive.namePlaceholder')}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && joinSession()}
@@ -203,12 +205,12 @@ export function JoinLiveSession() {
                   {loading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Joining...
+                      {t('joinLive.joinSession')}
                     </>
                   ) : (
                     <>
                       <Radio className="mr-2 h-4 w-4" />
-                      Join Session
+                      {t('joinLive.joinSession')}
                     </>
                   )}
                 </Button>
@@ -218,14 +220,14 @@ export function JoinLiveSession() {
             {step === 'joining' && (
               <div className="flex flex-col items-center py-8">
                 <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                <p className="mt-4 text-muted-foreground">Connecting to session...</p>
+                <p className="mt-4 text-muted-foreground">{t('joinLive.joiningText')}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          No registration required. Just enter the code and your name.
+          {t('joinLive.noRegistration')}
         </p>
       </div>
     </div>
