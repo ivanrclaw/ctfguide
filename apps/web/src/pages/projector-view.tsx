@@ -343,7 +343,7 @@ export function ProjectorView() {
                       {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}`}
                     </span>
                     <span className="font-bold text-2xl flex-1">{p.name}</span>
-                    <span className="text-2xl font-bold text-primary">
+                    <span className="text-2xl font-bold text-green-400">
                       {p.unlockedCount}/{info.totalPhases}
                     </span>
                   </div>
